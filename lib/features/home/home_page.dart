@@ -29,7 +29,7 @@ class HomePage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
-                  Text('Hello! 👋', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text('Goodbye! 👋', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
                   SizedBox(height: 4),
                   Text("Let's manage your food better today", style: TextStyle(fontSize: 16, color: Colors.white70)),
                 ],
