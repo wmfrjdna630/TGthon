@@ -5,10 +5,8 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-
     return SafeArea(
-      child: SingleChildScrollView( // 👈 오버플로 방지
+      child: SingleChildScrollView( // 오버플로 방지
         padding: const EdgeInsets.only(bottom: 24),
         child: Center(
           child: ConstrainedBox(
@@ -32,11 +30,15 @@ class HomePage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
-                      Text('Hello! 👋',
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text(
+                        'Hello! 👋',
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
                       SizedBox(height: 4),
-                      Text("Let's manage your food better today",
-                          style: TextStyle(fontSize: 16, color: Colors.white70)),
+                      Text(
+                        "Let's manage your food better today",
+                        style: TextStyle(fontSize: 16, color: Colors.white70),
+                      ),
                     ],
                   ),
                 ),
@@ -47,16 +49,16 @@ class HomePage extends StatelessWidget {
                   child: Column(
                     children: [
                       const SizedBox(height: 24),
-                      _buildQuickActions(screenHeight),
+                      _buildQuickActions(),
                       const SizedBox(height: 24),
-                      _buildOverview(screenHeight),
+                      _buildOverview(),
                       const SizedBox(height: 24),
-                      _buildExpiringNotice(screenHeight),
+                      _buildExpiringNotice(),
                       const SizedBox(height: 24),
-                      _buildBottomCards(screenHeight),
+                      _buildBottomCards(),
                     ],
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -65,7 +67,7 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildQuickActions(double screenHeight) {
+  Widget _buildQuickActions() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -87,36 +89,18 @@ class HomePage extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              Expanded(child: _customActionButton(Icons.add, 'Add Item')),
-              const SizedBox(width: 12),
-              Expanded(child: _customActionButton(Icons.camera_alt, 'Scan Receipt')),
+            children: const [
+              Expanded(child: _QuickActionCard(icon: Icons.add, label: 'Add Item')),
+              SizedBox(width: 12),
+              Expanded(child: _QuickActionCard(icon: Icons.camera_alt, label: 'Scan Receipt')),
             ],
-          )
+          ),
         ],
       ),
     );
   }
 
-  static Widget _customActionButton(IconData icon, String label) {
-    return Container(
-      height: 75,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFE8CC),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 20, color: Colors.black),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOverview(double screenHeight) {
+  Widget _buildOverview() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -136,7 +120,7 @@ class HomePage extends StatelessWidget {
               _overviewItem('3', 'Expiring', Colors.orange),
               _overviewItem('24', 'Recipes', Colors.teal),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -152,7 +136,7 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildExpiringNotice(double screenHeight) {
+  Widget _buildExpiringNotice() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -185,13 +169,13 @@ class HomePage extends StatelessWidget {
               textStyle: const TextStyle(fontSize: 14),
             ),
             child: const Text('View Fridge'),
-          )
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildBottomCards(double screenHeight) {
+  Widget _buildBottomCards() {
     return Row(
       children: [
         Expanded(child: _cardItem('My Fridge', '12 items', 'assets/img/fridge.jpg')),
@@ -212,7 +196,11 @@ class HomePage extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(imagePath, height: 60, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported)),
+          Image.asset(
+            imagePath,
+            height: 60,
+            errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported),
+          ),
           const SizedBox(height: 6),
           Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
           Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
@@ -222,3 +210,27 @@ class HomePage extends StatelessWidget {
   }
 }
 
+class _QuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _QuickActionCard({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFFFE8CC),
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        height: 75,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20, color: Colors.black),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+}
