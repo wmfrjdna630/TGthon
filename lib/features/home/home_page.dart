@@ -6,7 +6,8 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: SingleChildScrollView( // 오버플로 방지
+      child: SingleChildScrollView(
+        // 오버플로 방지
         padding: const EdgeInsets.only(bottom: 24),
         child: Center(
           child: ConstrainedBox(
@@ -16,7 +17,10 @@ class HomePage extends StatelessWidget {
                 // 상단 초록색 배너
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 24,
+                  ),
                   decoration: const BoxDecoration(
                     color: Color(0xFF34C965),
                     borderRadius: BorderRadius.only(
@@ -24,15 +28,23 @@ class HomePage extends StatelessWidget {
                       bottomRight: Radius.circular(32),
                     ),
                     boxShadow: [
-                      BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
                     ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
                       Text(
-                        'ddd! 👋',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                        'Hello! 👋',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                       SizedBox(height: 4),
                       Text(
@@ -74,7 +86,9 @@ class HomePage extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.black12),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,16 +97,26 @@ class HomePage extends StatelessWidget {
             children: const [
               Icon(Icons.add, color: Colors.green, size: 20),
               SizedBox(width: 6),
-              Text('Quick Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text(
+                'Quick Actions',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: const [
-              Expanded(child: _QuickActionCard(icon: Icons.add, label: 'Add Item')),
+              Expanded(
+                child: _QuickActionCard(icon: Icons.add, label: 'Add Item'),
+              ),
               SizedBox(width: 12),
-              Expanded(child: _QuickActionCard(icon: Icons.camera_alt, label: 'Scan Receipt')),
+              Expanded(
+                child: _QuickActionCard(
+                  icon: Icons.camera_alt,
+                  label: 'Scan Receipt',
+                ),
+              ),
             ],
           ),
         ],
@@ -106,12 +130,17 @@ class HomePage extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('\u{1F4C8} Overview', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          const Text(
+            '\u{1F4C8} Overview',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -129,9 +158,20 @@ class HomePage extends StatelessWidget {
   static Widget _overviewItem(String count, String label, Color color) {
     return Column(
       children: [
-        Text(count, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+        Text(
+          count,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
         const SizedBox(height: 2),
-        Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12),
+        ),
       ],
     );
   }
@@ -143,7 +183,9 @@ class HomePage extends StatelessWidget {
         color: const Color(0xFFFFF3E0),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.orange),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,7 +194,13 @@ class HomePage extends StatelessWidget {
             children: [
               Icon(Icons.warning, color: Colors.orange, size: 18),
               SizedBox(width: 6),
-              Text('Items expiring soon', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+              Text(
+                'Items expiring soon',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -164,7 +212,9 @@ class HomePage extends StatelessWidget {
               backgroundColor: Colors.white,
               foregroundColor: Colors.black,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               textStyle: const TextStyle(fontSize: 14),
             ),
@@ -178,9 +228,13 @@ class HomePage extends StatelessWidget {
   Widget _buildBottomCards() {
     return Row(
       children: [
-        Expanded(child: _cardItem('My Fridge', '12 items', 'assets/img/fridge.jpg')),
+        Expanded(
+          child: _cardItem('My Fridge', '12 items', 'assets/img/fridge.jpg'),
+        ),
         const SizedBox(width: 24),
-        Expanded(child: _cardItem('Recipes', '24 available', 'assets/img/recipe.png')),
+        Expanded(
+          child: _cardItem('Recipes', '24 available', 'assets/img/recipe.png'),
+        ),
       ],
     );
   }
@@ -190,7 +244,9 @@ class HomePage extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+        ],
       ),
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -203,7 +259,10 @@ class HomePage extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-          Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
         ],
       ),
     );
