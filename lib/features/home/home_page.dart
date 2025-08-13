@@ -7,51 +7,59 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 500),
-        child: Column(
-          children: [
-            // 상단 초록색 배너
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-              decoration: const BoxDecoration(
-                color: Color(0xFF34C965),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
+    return SafeArea(
+      child: SingleChildScrollView( // 👈 오버플로 방지
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Column(
+              children: [
+                // 상단 초록색 배너
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF34C965),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(32),
+                      bottomRight: Radius.circular(32),
+                    ),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text('Hello! 👋',
+                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                      SizedBox(height: 4),
+                      Text("Let's manage your food better today",
+                          style: TextStyle(fontSize: 16, color: Colors.white70)),
+                    ],
+                  ),
                 ),
-                boxShadow: [
-                  BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('Goodbye! 👋', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-                  SizedBox(height: 4),
-                  Text("Let's manage your food better today", style: TextStyle(fontSize: 16, color: Colors.white70)),
-                ],
-              ),
-            ),
 
-            // 본문
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildQuickActions(screenHeight),
-                    _buildOverview(screenHeight),
-                    _buildExpiringNotice(screenHeight),
-                    _buildBottomCards(screenHeight),
-                  ],
-                ),
-              ),
-            )
-          ],
+                // 본문
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 24),
+                      _buildQuickActions(screenHeight),
+                      const SizedBox(height: 24),
+                      _buildOverview(screenHeight),
+                      const SizedBox(height: 24),
+                      _buildExpiringNotice(screenHeight),
+                      const SizedBox(height: 24),
+                      _buildBottomCards(screenHeight),
+                    ],
+                  ),
+                )
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -59,7 +67,6 @@ class HomePage extends StatelessWidget {
 
   Widget _buildQuickActions(double screenHeight) {
     return Container(
-      height: screenHeight * 0.16,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -77,20 +84,13 @@ class HomePage extends StatelessWidget {
               Text('Quick Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              SizedBox(
-                width: 190,
-                height: 75,
-                child: _customActionButton(Icons.add, 'Add Item'),
-              ),
-              SizedBox(
-                width: 190,
-                height: 75,
-                child: _customActionButton(Icons.camera_alt, 'Scan Receipt'),
-              ),
+              Expanded(child: _customActionButton(Icons.add, 'Add Item')),
+              const SizedBox(width: 12),
+              Expanded(child: _customActionButton(Icons.camera_alt, 'Scan Receipt')),
             ],
           )
         ],
@@ -100,6 +100,7 @@ class HomePage extends StatelessWidget {
 
   static Widget _customActionButton(IconData icon, String label) {
     return Container(
+      height: 75,
       decoration: BoxDecoration(
         color: const Color(0xFFFFE8CC),
         borderRadius: BorderRadius.circular(16),
@@ -117,7 +118,6 @@ class HomePage extends StatelessWidget {
 
   Widget _buildOverview(double screenHeight) {
     return Container(
-      height: screenHeight * 0.16,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -154,7 +154,6 @@ class HomePage extends StatelessWidget {
 
   Widget _buildExpiringNotice(double screenHeight) {
     return Container(
-      height: screenHeight * 0.17,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF3E0),
@@ -195,16 +194,15 @@ class HomePage extends StatelessWidget {
   Widget _buildBottomCards(double screenHeight) {
     return Row(
       children: [
-        Expanded(child: _cardItem('My Fridge', '12 items', 'assets/img/fridge.jpg', screenHeight)),
+        Expanded(child: _cardItem('My Fridge', '12 items', 'assets/img/fridge.jpg')),
         const SizedBox(width: 24),
-        Expanded(child: _cardItem('Recipes', '24 available', 'assets/img/recipe.png', screenHeight)),
+        Expanded(child: _cardItem('Recipes', '24 available', 'assets/img/recipe.png')),
       ],
     );
   }
 
-  Widget _cardItem(String title, String subtitle, String imagePath, double screenHeight) {
+  Widget _cardItem(String title, String subtitle, String imagePath) {
     return Container(
-      height: screenHeight * 0.16,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -214,7 +212,7 @@ class HomePage extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(imagePath, height: 60),
+          Image.asset(imagePath, height: 60, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported)),
           const SizedBox(height: 6),
           Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
           Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
