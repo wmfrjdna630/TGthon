@@ -13,11 +13,11 @@ class _FridgePageState extends State<FridgePage> {
 
   // 👉 동적 계산: 보관 위치(location) 기준으로 카운트 산출
   Map<String, int> get filters => {
-        'All': items.length,
-        'Fridge': items.where((it) => it['location'] == 'Fridge').length,
-        'Freezer': items.where((it) => it['location'] == 'Freezer').length,
-        'Pantry': items.where((it) => it['location'] == 'Pantry').length,
-      };
+    'All': items.length,
+    'Fridge': items.where((it) => it['location'] == 'Fridge').length,
+    'Freezer': items.where((it) => it['location'] == 'Freezer').length,
+    'Pantry': items.where((it) => it['location'] == 'Pantry').length,
+  };
 
   // 👉 category(식품군)와 별개로 location(보관 위치) 필드 추가
   final List<Map<String, dynamic>> items = [
@@ -114,10 +114,13 @@ class _FridgePageState extends State<FridgePage> {
           constraints: const BoxConstraints(maxWidth: 500),
           child: Column(
             children: [
-              // 초록 배너
+              // 초록 배너 (가운데 정렬 + 원래 높이 유지)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 24,
+                ),
                 decoration: const BoxDecoration(
                   color: Color(0xFF34C965),
                   borderRadius: BorderRadius.only(
@@ -125,30 +128,59 @@ class _FridgePageState extends State<FridgePage> {
                     bottomRight: Radius.circular(32),
                   ),
                   boxShadow: [
-                    BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
                   ],
                 ),
                 child: Stack(
+                  alignment: Alignment.center, // 중앙 기준
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.kitchen, color: Colors.white),
-                            SizedBox(width: 8),
-                            Text('My Fridge', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text('${filters['All']} items stored', style: const TextStyle(color: Colors.white70)),
-                      ],
+                    // 가운데 정렬된 제목 + 서브텍스트
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min, // 불필요한 높이 확장 방지
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.kitchen, color: Colors.white),
+                              SizedBox(width: 8),
+                              Text(
+                                'My Fridge',
+                                style: TextStyle(
+                                  fontSize: 24, // HomePage 제목과 동일
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${filters['All']} items stored',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 16, // HomePage 부제와 동일
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const Positioned(
-                      right: 0,
+                    // + 버튼은 상단 우측 고정
+                    Align(
+                      alignment: Alignment.centerRight,
                       child: CircleAvatar(
-                        backgroundColor: Color(0xFF5DCE88),
-                        child: Text('+', style: TextStyle(fontSize: 24, color: Colors.white)),
+                        backgroundColor: const Color(0xFF5DCE88),
+                        child: const Text(
+                          '+',
+                          style: TextStyle(fontSize: 24, color: Colors.white),
+                        ),
                       ),
                     ),
                   ],
@@ -162,13 +194,18 @@ class _FridgePageState extends State<FridgePage> {
                   child: Column(
                     children: [
                       const SizedBox(height: 24),
+
                       // 검색창
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: const [
-                            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 6,
+                              offset: Offset(0, 2),
+                            ),
                           ],
                         ),
                         padding: const EdgeInsets.all(20),
@@ -181,14 +218,22 @@ class _FridgePageState extends State<FridgePage> {
                             focusNode: _focusNode,
                             decoration: InputDecoration(
                               hintText: 'Search ingredients...',
-                              prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                              prefixIcon: const Icon(
+                                Icons.search,
+                                color: Colors.grey,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                              ),
                               border: OutlineInputBorder(
                                 borderSide: BorderSide.none,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderSide: const BorderSide(color: Color(0xFF34C965), width: 2),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF34C965),
+                                  width: 2,
+                                ),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
@@ -203,10 +248,12 @@ class _FridgePageState extends State<FridgePage> {
 
                       const SizedBox(height: 12),
 
-                      // 아이템 리스트
+                      // 아이템 리스트 (이 영역만 스크롤)
                       Expanded(
                         child: ScrollConfiguration(
-                          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                          behavior: ScrollConfiguration.of(
+                            context,
+                          ).copyWith(scrollbars: false),
                           child: AnimatedSwitcher(
                             duration: const Duration(milliseconds: 300),
                             child: ListView.builder(
@@ -220,11 +267,11 @@ class _FridgePageState extends State<FridgePage> {
                             ),
                           ),
                         ),
-                      )
+                      ),
                     ],
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),
@@ -255,19 +302,27 @@ class _FridgePageState extends State<FridgePage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(key, style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: isSelected ? Colors.black : Colors.grey.shade600,
-                    )),
+                    Text(
+                      key,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: isSelected ? Colors.black : Colors.grey.shade600,
+                      ),
+                    ),
                     const SizedBox(width: 12),
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFFF0F0F0).withAlpha(77) : Colors.transparent,
+                        color: isSelected
+                            ? const Color(0xFFF0F0F0).withAlpha(77)
+                            : Colors.transparent,
                         shape: BoxShape.circle,
                       ),
-                      child: Text('$count', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    )
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -281,7 +336,8 @@ class _FridgePageState extends State<FridgePage> {
   Widget _buildItemCard(Map<String, dynamic> item) {
     final int totalDays = item['totalDays'] as int? ?? 180;
     final int daysLeft = item['daysLeft'] as int? ?? 0;
-    final double progress = (totalDays - daysLeft).clamp(0, totalDays) / totalDays;
+    final double progress =
+        (totalDays - daysLeft).clamp(0, totalDays) / totalDays;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -289,7 +345,13 @@ class _FridgePageState extends State<FridgePage> {
       decoration: BoxDecoration(
         color: item['background'],
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(13), blurRadius: 6, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(13),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,10 +359,22 @@ class _FridgePageState extends State<FridgePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(item['name'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(
+                item['name'],
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               Row(
                 children: [
-                  Text(item['category'], style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.bold)),
+                  Text(
+                    item['category'],
+                    style: const TextStyle(
+                      color: Colors.black54,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(width: 6),
                   Icon(item['icon'], size: 16, color: Colors.black45),
                 ],
@@ -308,13 +382,22 @@ class _FridgePageState extends State<FridgePage> {
             ],
           ),
           const SizedBox(height: 4),
-          Text('${item['amount']} · ${item['location']}', style: const TextStyle(color: Colors.black54)),
+          Text(
+            '${item['amount']} · ${item['location']}',
+            style: const TextStyle(color: Colors.black54),
+          ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(item['status'], style: TextStyle(color: item['statusColor'])),
-              Text('${daysLeft}d left', style: const TextStyle(color: Colors.black54)),
+              Text(
+                item['status'],
+                style: TextStyle(color: item['statusColor']),
+              ),
+              Text(
+                '${daysLeft}d left',
+                style: const TextStyle(color: Colors.black54),
+              ),
             ],
           ),
           const SizedBox(height: 6),

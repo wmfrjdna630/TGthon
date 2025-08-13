@@ -202,6 +202,7 @@ class _HomePageState extends State<HomePage> {
               const barHeight = 6.0;
               const totalDays = 14.0;
               const rowGap = 36.0;
+              const labelGap = 22.0;
 
               return SizedBox(
                 height: rowGap * 3 + 28,
@@ -227,12 +228,12 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     const Positioned(
-                      top: barHeight + 4,
+                      top: -labelGap,
                       left: 0,
                       child: Text('오늘', style: TextStyle(fontSize: 12)),
                     ),
                     const Positioned(
-                      top: barHeight + 4,
+                      top: -labelGap,
                       right: 0,
                       child: Text('2주', style: TextStyle(fontSize: 12)),
                     ),
