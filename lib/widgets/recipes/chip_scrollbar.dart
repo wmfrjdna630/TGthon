@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
+// app_colors.dart import 제거 - 실제로 사용되지 않음
 
 /// 레시피 필터 칩용 커스텀 스크롤바 위젯
 /// 가로 스크롤 진행률과 좌우 화살표 버튼 제공

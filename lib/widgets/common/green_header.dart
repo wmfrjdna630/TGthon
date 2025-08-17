@@ -51,7 +51,8 @@ class GreenHeader extends StatelessWidget {
     );
   }
 
-  /// 레시피 페이지용 헤더
+  /// 레시피 페이지용 헤더 (중복 제거됨)
+  /// readyCount와 almostCount를 subtitle로 설정하여 중복 방지
   factory GreenHeader.recipes({
     required int readyCount,
     required int almostCount,
@@ -59,11 +60,9 @@ class GreenHeader extends StatelessWidget {
     return GreenHeader(
       icon: Icons.soup_kitchen,
       title: 'Recipes',
-      subtitle: null, // 커스텀 서브타이틀을 위해 null
-      trailing: _RecipeStatusLine(
-        readyCount: readyCount,
-        almostCount: almostCount,
-      ),
+      // 기존에 _RecipeStatusLine을 trailing으로 설정했던 것을 제거하고
+      // 대신 간단한 텍스트 subtitle로 변경하여 중복 방지
+      subtitle: '⭐ $readyCount ready to cook • $almostCount almost ready',
     );
   }
 
@@ -104,6 +103,7 @@ class GreenHeader extends StatelessWidget {
   }
 
   /// 메인 콘텐츠 (아이콘 + 제목 + 부제목) 빌드
+  /// 레시피 페이지의 중복 표시 문제를 해결하기 위해 조건문 제거
   Widget _buildMainContent() {
     return Center(
       child: Column(
@@ -131,73 +131,12 @@ class GreenHeader extends StatelessWidget {
             ),
           ],
 
-          // 레시피 페이지의 경우 특별한 상태 라인 표시
-          if (title == 'Recipes' && trailing is _RecipeStatusLine) ...[
-            const SizedBox(height: 6),
-            trailing!,
-          ],
+          // 기존에 있던 레시피 페이지 특별 처리 부분을 제거하여 중복 방지
+          // if (title == 'Recipes' && trailing is _RecipeStatusLine) 부분 삭제됨
         ],
       ),
     );
   }
 }
 
-/// 레시피 페이지 헤더용 상태 라인 위젯
-class _RecipeStatusLine extends StatelessWidget {
-  final int readyCount;
-  final int almostCount;
-
-  const _RecipeStatusLine({
-    required this.readyCount,
-    required this.almostCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Text.rich(
-      TextSpan(
-        children: [
-          const WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: Icon(Icons.star_border, size: 16, color: Colors.white),
-          ),
-          const TextSpan(text: ' '),
-          TextSpan(
-            text: '$readyCount ready to cook',
-            style: const TextStyle(color: Colors.white),
-          ),
-          const WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: SizedBox(width: 12),
-          ),
-          const WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: _Dot(color: Color(0xFFF5A623)),
-          ),
-          TextSpan(
-            text: ' $almostCount almost ready',
-            style: const TextStyle(color: Colors.white),
-          ),
-        ],
-      ),
-      textAlign: TextAlign.center,
-    );
-  }
-}
-
-/// 작은 원형 도트 위젯
-class _Dot extends StatelessWidget {
-  final Color color;
-
-  const _Dot({required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      margin: const EdgeInsets.only(right: 3),
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-}
+// _RecipeStatusLine과 _Dot 클래스들은 더 이상 사용되지 않으므로 제거됨

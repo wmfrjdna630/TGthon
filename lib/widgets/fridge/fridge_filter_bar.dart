@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_text_styles.dart';
+// app_colors.dart와 app_text_styles.dart import 제거 - 실제로 사용되지 않음
 
 /// 냉장고 페이지의 필터 바 위젯
 /// All, Fridge, Freezer, Pantry 위치별 필터링 제공
