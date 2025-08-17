@@ -18,13 +18,13 @@ class AppColors {
 
   // ========== 상태별 색상 ==========
 
-  /// 위험 상태 (유통기한 임박, 오류 등)
+  /// 위험 상태 (유통기한 1주 이하) - 빨간색
   static const Color danger = Color(0xFFE74C3C);
 
-  /// 경고 상태 (주의 필요)
+  /// 경고 상태 (유통기한 1-4주) - 주황색
   static const Color warning = Color(0xFFF39C12);
 
-  /// 안전/성공 상태
+  /// 안전/성공 상태 (유통기한 4주 이상) - 초록색
   static const Color success = Color(0xFF2ECC71);
 
   /// 정보 상태
@@ -121,13 +121,25 @@ class AppColors {
   /// 진행률 바 비활성 배경색
   static const Color progressInactive = Color(0xFFF8F8F8);
 
-  // ========== 그라데이션 색상 ==========
+  // ========== 새로운 유통기한 그라데이션 색상 ==========
 
-  /// 유통기한 타임라인 그라데이션 (위험 -> 주의 -> 안전)
-  static const List<Color> timelineGradient = [
-    danger, // 위험 (빨간색)
-    warning, // 주의 (주황색)
-    success, // 안전 (초록색)
+  /// 1주 필터용 그라데이션 (빨간색만)
+  static const List<Color> timelineGradientWeek = [
+    danger, // 빨간색
+    danger, // 빨간색
+  ];
+
+  /// 1개월 필터용 그라데이션 (빨간색 -> 주황색)
+  static const List<Color> timelineGradientMonth = [
+    danger, // 빨간색 (1주)
+    warning, // 주황색 (4주)
+  ];
+
+  /// 전체 필터용 그라데이션 (빨간색 -> 주황색 -> 초록색)
+  static const List<Color> timelineGradientAll = [
+    danger, // 빨간색 (1주)
+    warning, // 주황색 (4주)
+    success, // 초록색 (4주 이상)
   ];
 
   // ========== 투명도 변형 ==========
@@ -147,13 +159,42 @@ class AppColors {
   /// 성공 색상 10% 투명도
   static Color get successWithOpacity10 => success.withOpacity(0.1);
 
-  // ========== 유틸리티 메서드 ==========
+  // ========== 유틸리티 메서드들 ==========
 
-  /// 유통기한 일수에 따른 색상 반환
+  /// 유통기한 일수에 따른 색상 반환 (새로운 기준)
+  /// 1주(7일) 이하: 빨간색, 1-4주(7-28일): 주황색, 4주 이상: 초록색
   static Color getColorByDaysLeft(int daysLeft) {
-    if (daysLeft <= 3) return danger; // 위험 (3일 이하)
-    if (daysLeft <= 7) return warning; // 주의 (4-7일)
-    return success; // 안전 (8일 이상)
+    if (daysLeft <= 7) return danger; // 1주 이하: 빨간색
+    if (daysLeft <= 28) return warning; // 1-4주: 주황색
+    return success; // 4주 이상: 초록색
+  }
+
+  /// 필터 타입에 따른 그라데이션 색상 반환 (전체를 1년으로 수정)
+  static List<Color> getTimelineGradient(String filterType) {
+    switch (filterType) {
+      case '1주':
+        return timelineGradientWeek;
+      case '1개월':
+        return timelineGradientMonth;
+      case '1년': // 전체를 1년으로 변경
+        return timelineGradientAll;
+      default:
+        return timelineGradientAll;
+    }
+  }
+
+  /// 필터 타입에 따른 그라데이션 stop 포인트 반환 (전체를 1년으로 수정)
+  static List<double> getTimelineGradientStops(String filterType) {
+    switch (filterType) {
+      case '1주':
+        return [0.0, 1.0]; // 빨간색만
+      case '1개월':
+        return [0.0, 1.0]; // 빨간색 -> 주황색
+      case '1년': // 전체를 1년으로 변경
+        return [0.0, 0.25, 1.0]; // 빨간색 -> 주황색 -> 초록색
+      default:
+        return [0.0, 0.25, 1.0];
+    }
   }
 
   /// 진행률에 따른 색상 반환 (0.0 ~ 1.0)

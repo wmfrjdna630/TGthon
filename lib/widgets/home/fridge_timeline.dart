@@ -6,6 +6,7 @@ import '../../screens/home/home_page.dart'; // TimeFilter enum 사용
 
 /// 홈페이지의 냉장고 타임라인 위젯
 /// 유통기한이 임박한 식품들을 시간순으로 시각화하여 표시
+/// 새로운 색상 체계: 빨간색(1주), 주황색(4주), 초록색(4주 이상)
 class FridgeTimeline extends StatelessWidget {
   final String userName; // 사용자 이름
   final List<FridgeItem> fridgeItems; // 표시할 냉장고 아이템들
@@ -24,11 +25,11 @@ class FridgeTimeline extends StatelessWidget {
   int get _maxDaysForFilter {
     switch (currentFilter) {
       case TimeFilter.week:
-        return 7;
-      case TimeFilter.biweek:
-        return 14;
+        return 7; // 1주
       case TimeFilter.month:
-        return 30;
+        return 28; // 1개월 (4주)
+      case TimeFilter.all:
+        return 365; // 1년
     }
   }
 
@@ -37,10 +38,10 @@ class FridgeTimeline extends StatelessWidget {
     switch (currentFilter) {
       case TimeFilter.week:
         return '1주';
-      case TimeFilter.biweek:
-        return '2주';
       case TimeFilter.month:
         return '1개월';
+      case TimeFilter.all:
+        return '1년';
     }
   }
 
@@ -85,6 +86,7 @@ class FridgeTimeline extends StatelessWidget {
             items: sortedItems,
             maxDays: _maxDaysForFilter,
             filterLabel: _filterLabel,
+            filterType: _filterLabel,
           ),
         ],
       ),
@@ -92,7 +94,7 @@ class FridgeTimeline extends StatelessWidget {
   }
 }
 
-/// 시간 필터 칩들
+/// 시간 필터 칩들 (새로운 필터 옵션)
 class _TimeFilterChips extends StatelessWidget {
   final TimeFilter currentFilter;
   final ValueChanged<TimeFilter> onFilterChanged;
@@ -113,11 +115,11 @@ class _TimeFilterChips extends StatelessWidget {
           case TimeFilter.week:
             label = '1주';
             break;
-          case TimeFilter.biweek:
-            label = '2주';
-            break;
           case TimeFilter.month:
             label = '1개월';
+            break;
+          case TimeFilter.all:
+            label = '1년';
             break;
         }
 
@@ -147,16 +149,18 @@ class _TimeFilterChips extends StatelessWidget {
   }
 }
 
-/// 타임라인 시각화 위젯
+/// 타임라인 시각화 위젯 (새로운 색상 시스템)
 class _TimelineVisualization extends StatelessWidget {
   final List<FridgeItem> items;
   final int maxDays;
   final String filterLabel;
+  final String filterType; // 그라데이션 타입 결정용
 
   const _TimelineVisualization({
     required this.items,
     required this.maxDays,
     required this.filterLabel,
+    required this.filterType,
   });
 
   @override
@@ -169,12 +173,16 @@ class _TimelineVisualization extends StatelessWidget {
         const rowGap = 36.0;
         const labelGap = 22.0;
 
+        // 필터에 따른 그라데이션과 stop 포인트
+        final gradientColors = AppColors.getTimelineGradient(filterType);
+        final gradientStops = AppColors.getTimelineGradientStops(filterType);
+
         return SizedBox(
           height: rowGap * 3 + 28,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // 그라데이션 바 (위험 -> 주의 -> 신선)
+              // 동적 그라데이션 바 (필터에 따라 색상 변화)
               Positioned(
                 left: 0,
                 right: 0,
@@ -183,9 +191,9 @@ class _TimelineVisualization extends StatelessWidget {
                   height: barHeight,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
-                    gradient: const LinearGradient(
-                      stops: [0.0, 0.25, 1.0],
-                      colors: AppColors.timelineGradient,
+                    gradient: LinearGradient(
+                      stops: gradientStops,
+                      colors: gradientColors,
                     ),
                   ),
                 ),
@@ -202,6 +210,9 @@ class _TimelineVisualization extends StatelessWidget {
                 right: 0,
                 child: Text(filterLabel, style: const TextStyle(fontSize: 12)),
               ),
+
+              // 구간 구분 라벨 (필터에 따라 다르게 표시)
+              ..._buildTimelineLabels(width, totalDays, filterType),
 
               // 각 아이템을 정확한 위치에 배치
               ...items.asMap().entries.map((e) {
@@ -235,9 +246,67 @@ class _TimelineVisualization extends StatelessWidget {
       },
     );
   }
+
+  /// 필터 타입에 따른 시간 구간 라벨 생성
+  List<Widget> _buildTimelineLabels(
+    double width,
+    double totalDays,
+    String filterType,
+  ) {
+    const labelGap = 22.0;
+    final labels = <Widget>[];
+
+    switch (filterType) {
+      case '1주':
+        // 1주 필터: 구간 라벨 없음 (빨간색만)
+        break;
+
+      case '1개월':
+        // 1개월 필터: 1주 지점에 구분선
+        final weekPosition = (7 / totalDays) * width;
+        labels.add(
+          Positioned(
+            top: -labelGap,
+            left: weekPosition - 10, // 텍스트 중앙 정렬
+            child: const Text(
+              '1주',
+              style: TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ),
+        );
+        break;
+
+      case '1년':
+        // 1년 필터: 1주, 4주 지점에 구분선
+        final weekPosition = (7 / totalDays) * width;
+        final monthPosition = (28 / totalDays) * width;
+
+        labels.addAll([
+          Positioned(
+            top: -labelGap,
+            left: weekPosition - 10,
+            child: const Text(
+              '1주',
+              style: TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ),
+          Positioned(
+            top: -labelGap,
+            left: monthPosition - 15,
+            child: const Text(
+              '4주',
+              style: TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ),
+        ]);
+        break;
+    }
+
+    return labels;
+  }
 }
 
-/// 타임라인의 개별 아이템 칩
+/// 타임라인의 개별 아이템 칩 (새로운 색상 시스템 적용)
 class _TimelineChip extends StatelessWidget {
   final String name;
   final int daysLeft;
@@ -246,6 +315,7 @@ class _TimelineChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 새로운 색상 기준 적용
     final bg = AppColors.getColorByDaysLeft(daysLeft);
 
     return Container(

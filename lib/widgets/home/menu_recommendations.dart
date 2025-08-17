@@ -10,12 +10,16 @@ class MenuRecommendations extends StatelessWidget {
   final List<MenuRec> menuRecommendations; // 추천 메뉴 리스트
   final SortMode currentSortMode; // 현재 정렬 모드
   final ValueChanged<SortMode> onSortModeChanged; // 정렬 모드 변경 콜백
+  final Function(MenuRec)? onMenuTapped; // 메뉴 클릭 콜백 (새로 추가)
+  final Function(MenuRec)? onFavoriteToggled; // 즐겨찾기 토글 콜백 (새로 추가)
 
   const MenuRecommendations({
     super.key,
     required this.menuRecommendations,
     required this.currentSortMode,
     required this.onSortModeChanged,
+    this.onMenuTapped, // 메뉴 클릭 핸들러
+    this.onFavoriteToggled, // 즐겨찾기 토글 핸들러
   });
 
   @override
@@ -50,8 +54,14 @@ class MenuRecommendations extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // 메뉴 카드들
-          ...menuRecommendations.map((menu) => _MenuCard(menu: menu)),
+          // 메뉴 카드들 (클릭 가능하도록 수정)
+          ...menuRecommendations.map(
+            (menu) => _MenuCard(
+              menu: menu,
+              onTap: () => onMenuTapped?.call(menu), // 메뉴 클릭 콜백
+              onFavoriteToggle: () => onFavoriteToggled?.call(menu), // 즐겨찾기 콜백
+            ),
+          ),
         ],
       ),
     );
@@ -136,61 +146,108 @@ class _SortChip extends StatelessWidget {
   }
 }
 
-/// 개별 메뉴 추천 카드
+/// 개별 메뉴 추천 카드 (클릭 가능하도록 수정)
 class _MenuCard extends StatelessWidget {
   final MenuRec menu;
+  final VoidCallback? onTap; // 메뉴 전체 클릭 콜백
+  final VoidCallback? onFavoriteToggle; // 즐겨찾기 토글 콜백
 
-  const _MenuCard({required this.menu});
+  const _MenuCard({required this.menu, this.onTap, this.onFavoriteToggle});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: menu.hasAllRequired
-            ? AppColors.menuAvailable
-            : AppColors.menuMissing,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: menu.hasAllRequired
-              ? AppColors.menuAvailableBorder
-              : AppColors.menuMissingBorder,
-          width: 1,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          // 메뉴 카드 전체를 클릭 가능하게 만들기
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: menu.hasAllRequired
+                  ? AppColors.menuAvailable
+                  : AppColors.menuMissing,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: menu.hasAllRequired
+                    ? AppColors.menuAvailableBorder
+                    : AppColors.menuMissingBorder,
+                width: 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 메뉴 제목 + 즐겨찾기 버튼
+                Row(
+                  children: [
+                    // 메뉴 제목 (확장하여 공간 차지)
+                    Expanded(
+                      child: Text(menu.title, style: AppTextStyles.menuTitle),
+                    ),
+
+                    // 즐겨찾기 하트 버튼 (클릭 가능)
+                    _FavoriteButton(
+                      isFavorite: menu.favorite,
+                      onToggle: onFavoriteToggle,
+                    ),
+                  ],
+                ),
+
+                // 필수 재료 메시지 (부족한 경우)
+                if (menu.needMessage.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _MessageRow(
+                    icon: Icons.warning_amber,
+                    message: menu.needMessage,
+                    color: menu.hasAllRequired ? Colors.green : Colors.orange,
+                  ),
+                ],
+
+                // 선택 재료 메시지 (있으면 더 좋은 재료)
+                if (menu.goodMessage.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  _MessageRow(
+                    icon: Icons.check_circle,
+                    message: menu.goodMessage,
+                    color: Colors.green,
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 메뉴 제목 + 즐겨찾기
-          Row(
-            children: [
-              Expanded(child: Text(menu.title, style: AppTextStyles.menuTitle)),
-              if (menu.favorite)
-                const Icon(Icons.favorite, color: Colors.red, size: 20),
-            ],
+    );
+  }
+}
+
+/// 즐겨찾기 하트 버튼 위젯
+class _FavoriteButton extends StatelessWidget {
+  final bool isFavorite;
+  final VoidCallback? onToggle;
+
+  const _FavoriteButton({required this.isFavorite, this.onToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        // 하트 버튼만 따로 클릭 가능
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(8), // 클릭 영역 확대를 위한 패딩
+          child: Icon(
+            isFavorite ? Icons.favorite : Icons.favorite_border,
+            color: isFavorite ? Colors.red : Colors.grey,
+            size: 20,
           ),
-
-          // 필수 재료 메시지 (부족한 경우)
-          if (menu.needMessage.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _MessageRow(
-              icon: Icons.warning_amber,
-              message: menu.needMessage,
-              color: menu.hasAllRequired ? Colors.green : Colors.orange,
-            ),
-          ],
-
-          // 선택 재료 메시지 (있으면 더 좋은 재료)
-          if (menu.goodMessage.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            _MessageRow(
-              icon: Icons.check_circle,
-              message: menu.goodMessage,
-              color: Colors.green,
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

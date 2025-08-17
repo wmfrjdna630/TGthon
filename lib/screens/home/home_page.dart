@@ -5,6 +5,7 @@ import '../../widgets/home/quick_actions_card.dart';
 import '../../widgets/home/fridge_timeline.dart';
 import '../../widgets/home/menu_recommendations.dart';
 import '../../data/sample_data.dart';
+import '../../data/mock_repository.dart'; // MockRepository 추가
 import '../../models/fridge_item.dart';
 import '../../models/menu_rec.dart';
 
@@ -22,8 +23,8 @@ class HomePage extends StatefulWidget {
 /// 정렬 모드 열거형
 enum SortMode { expiry, frequency, favorite }
 
-/// 시간 필터 열거형
-enum TimeFilter { week, biweek, month }
+/// 시간 필터 열거형 (새로운 기준)
+enum TimeFilter { week, month, all }
 
 class _HomePageState extends State<HomePage> {
   // ========== 상태 변수들 ==========
@@ -31,29 +32,32 @@ class _HomePageState extends State<HomePage> {
   /// 메뉴 정렬 모드
   SortMode _sortMode = SortMode.expiry;
 
-  /// 타임라인 시간 필터
-  TimeFilter _timeFilter = TimeFilter.biweek;
+  /// 타임라인 시간 필터 (새로운 기본값)
+  TimeFilter _timeFilter = TimeFilter.month;
 
   /// 검색 텍스트 컨트롤러
   final TextEditingController _searchController = TextEditingController();
+
+  /// 목 데이터 저장소 (즐겨찾기 토글을 위해 추가)
+  final MockRepository _repository = MockRepository();
+
+  /// 메뉴 추천 리스트 (상태로 관리)
+  List<MenuRec> _menuRecommendations = [];
 
   // ========== 데이터 접근자들 ==========
 
   /// 샘플 데이터에서 타임라인 아이템 가져오기
   List<FridgeItem> get _allFridgeItems => SampleData.timelineItems;
 
-  /// 샘플 데이터에서 메뉴 추천 가져오기
-  List<MenuRec> get _menuRecommendations => SampleData.menuRecommendations;
-
-  /// 시간 필터에 따른 최대 일수
+  /// 시간 필터에 따른 최대 일수 (전체를 1년으로 수정)
   int get _maxDaysForFilter {
     switch (_timeFilter) {
       case TimeFilter.week:
-        return 7;
-      case TimeFilter.biweek:
-        return 14;
+        return 7; // 1주
       case TimeFilter.month:
-        return 30;
+        return 28; // 1개월 (4주)
+      case TimeFilter.all:
+        return 365; // 1년 (전체)
     }
   }
 
@@ -64,7 +68,7 @@ class _HomePageState extends State<HomePage> {
         .toList();
   }
 
-  /// 정렬된 메뉴 추천들
+  /// 정렬된 메뉴 추천들 (actualFrequency 반영)
   List<MenuRec> get _sortedMenus {
     final list = [..._menuRecommendations];
     switch (_sortMode) {
@@ -72,7 +76,8 @@ class _HomePageState extends State<HomePage> {
         list.sort((a, b) => a.minDaysLeft.compareTo(b.minDaysLeft));
         break;
       case SortMode.frequency:
-        list.sort((a, b) => b.frequency.compareTo(a.frequency));
+        // actualFrequency를 사용하여 클릭 횟수가 반영된 빈도로 정렬
+        list.sort((a, b) => b.actualFrequency.compareTo(a.actualFrequency));
         break;
       case SortMode.favorite:
         list.sort((a, b) {
@@ -87,9 +92,36 @@ class _HomePageState extends State<HomePage> {
   // ========== 라이프사이클 메서드들 ==========
 
   @override
+  void initState() {
+    super.initState();
+    _loadMenuRecommendations();
+  }
+
+  @override
   void dispose() {
+    // 페이지 종료 시 모든 SnackBar 제거
+    _clearAllSnackBars();
     _searchController.dispose();
     super.dispose();
+  }
+
+  // ========== 데이터 로딩 ==========
+
+  /// 메뉴 추천 데이터 로딩
+  Future<void> _loadMenuRecommendations() async {
+    try {
+      final menus = await _repository.getMenuRecommendations();
+      if (mounted) {
+        setState(() {
+          _menuRecommendations = menus;
+        });
+      }
+    } catch (e) {
+      // 에러 발생 시 샘플 데이터 사용
+      setState(() {
+        _menuRecommendations = SampleData.menuRecommendations;
+      });
+    }
   }
 
   // ========== 빌드 메서드 ==========
@@ -139,11 +171,13 @@ class _HomePageState extends State<HomePage> {
 
                       const SizedBox(height: 24),
 
-                      // 메뉴 추천
+                      // 메뉴 추천 (클릭 이벤트 핸들러 추가)
                       MenuRecommendations(
                         menuRecommendations: _sortedMenus,
                         currentSortMode: _sortMode,
                         onSortModeChanged: _onSortModeChanged,
+                        onMenuTapped: _onMenuTapped, // 메뉴 클릭 핸들러
+                        onFavoriteToggled: _onFavoriteToggled, // 즐겨찾기 토글 핸들러
                       ),
                     ],
                   ),
@@ -179,5 +213,119 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _sortMode = newMode;
     });
+  }
+
+  /// 메뉴 클릭 처리 (빈도 카운트 기능 추가)
+  Future<void> _onMenuTapped(MenuRec menu) async {
+    try {
+      // 1. 먼저 클릭 카운트 증가 (백엔드에 저장)
+      await _repository.incrementMenuClick(menu.title);
+
+      // 2. 로컬 상태도 즉시 업데이트 (UI 반응성을 위해)
+      setState(() {
+        final index = _menuRecommendations.indexWhere(
+          (m) => m.title == menu.title,
+        );
+        if (index != -1) {
+          _menuRecommendations[index] = _menuRecommendations[index]
+              .incrementClick();
+        }
+      });
+
+      // 3. 사용자에게 피드백 제공
+      _showInfoSnackBar('${menu.title} 레시피 보기 (클릭: ${menu.clickCount + 1}회)');
+
+      // TODO: 실제 레시피 상세보기 페이지로 이동
+      // Navigator.push(context, MaterialPageRoute(builder: (context) => RecipeDetailPage(menu: menu)));
+    } catch (e) {
+      _showErrorSnackBar('메뉴 정보를 불러오는데 실패했습니다');
+    }
+  }
+
+  /// 즐겨찾기 토글 처리 (새로 추가)
+  Future<void> _onFavoriteToggled(MenuRec menu) async {
+    try {
+      await _repository.toggleMenuFavorite(menu.title);
+
+      // 로컬 상태도 즉시 업데이트
+      setState(() {
+        final index = _menuRecommendations.indexWhere(
+          (m) => m.title == menu.title,
+        );
+        if (index != -1) {
+          _menuRecommendations[index] = _menuRecommendations[index].copyWith(
+            favorite: !_menuRecommendations[index].favorite,
+          );
+        }
+      });
+
+      // 사용자에게 피드백 제공
+      final message = menu.favorite
+          ? '${menu.title}을(를) 즐겨찾기에서 제거했습니다'
+          : '${menu.title}을(를) 즐겨찾기에 추가했습니다';
+      _showSuccessSnackBar(message);
+    } catch (e) {
+      _showErrorSnackBar('즐겨찾기 변경에 실패했습니다');
+    }
+  }
+
+  // ========== 개선된 스낵바 헬퍼들 ==========
+
+  /// 모든 SnackBar를 즉시 제거하는 메서드
+  void _clearAllSnackBars() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
+  }
+
+  /// 기존 SnackBar 제거 후 새 SnackBar 표시하는 공통 메서드
+  void _showSnackBar({
+    required String message,
+    required Color backgroundColor,
+    Duration duration = const Duration(milliseconds: 1500), // 기본 1.5초로 단축
+  }) {
+    if (!mounted) return;
+
+    // 기존 SnackBar를 즉시 제거
+    _clearAllSnackBars();
+
+    // 새 SnackBar 표시
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+        duration: duration,
+        behavior: SnackBarBehavior.floating, // 플로팅 스타일로 더 빠른 반응성
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  /// 성공 스낵바
+  void _showSuccessSnackBar(String message) {
+    _showSnackBar(
+      message: message,
+      backgroundColor: Colors.green,
+      duration: const Duration(milliseconds: 1200), // 성공 메시지는 더 짧게
+    );
+  }
+
+  /// 오류 스낵바
+  void _showErrorSnackBar(String message) {
+    _showSnackBar(
+      message: message,
+      backgroundColor: Colors.red,
+      duration: const Duration(milliseconds: 2000), // 오류 메시지는 조금 더 길게
+    );
+  }
+
+  /// 정보 스낵바
+  void _showInfoSnackBar(String message) {
+    _showSnackBar(
+      message: message,
+      backgroundColor: Colors.blue.shade600,
+      duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본 길이
+    );
   }
 }

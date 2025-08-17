@@ -132,7 +132,7 @@ class MockRepository {
     return List.from(_menuRecommendations);
   }
 
-  /// 정렬된 메뉴 추천 조회
+  /// 정렬된 메뉴 추천 조회 (actualFrequency 반영)
   Future<List<MenuRec>> getSortedMenuRecommendations(String sortBy) async {
     await _simulateNetworkDelay();
     final list = List<MenuRec>.from(_menuRecommendations);
@@ -142,7 +142,8 @@ class MockRepository {
         list.sort((a, b) => a.minDaysLeft.compareTo(b.minDaysLeft));
         break;
       case 'frequency':
-        list.sort((a, b) => b.frequency.compareTo(a.frequency));
+        // actualFrequency를 사용하여 정렬 (클릭 횟수 반영)
+        list.sort((a, b) => b.actualFrequency.compareTo(a.actualFrequency));
         break;
       case 'favorite':
         list.sort((a, b) {
@@ -165,6 +166,39 @@ class MockRepository {
       final menu = _menuRecommendations[index];
       _menuRecommendations[index] = menu.copyWith(favorite: !menu.favorite);
     }
+  }
+
+  /// 메뉴 클릭 카운트 증가 (새로 추가)
+  /// 메뉴를 클릭할 때마다 호출되어 사용 빈도를 증가시킵니다
+  Future<void> incrementMenuClick(String menuTitle) async {
+    await _simulateNetworkDelay();
+    final index = _menuRecommendations.indexWhere(
+      (menu) => menu.title == menuTitle,
+    );
+    if (index != -1) {
+      // incrementClick() 메서드를 사용하여 클릭 횟수와 마지막 클릭 시간 업데이트
+      _menuRecommendations[index] = _menuRecommendations[index]
+          .incrementClick();
+    }
+  }
+
+  /// 메뉴 클릭 통계 조회 (새로 추가)
+  /// 개발 및 디버깅 목적으로 메뉴별 클릭 통계를 확인할 수 있습니다
+  Future<Map<String, Map<String, dynamic>>> getMenuClickStats() async {
+    await _simulateNetworkDelay();
+    final stats = <String, Map<String, dynamic>>{};
+
+    for (final menu in _menuRecommendations) {
+      stats[menu.title] = {
+        'clickCount': menu.clickCount,
+        'baseFrequency': menu.frequency,
+        'actualFrequency': menu.actualFrequency,
+        'lastClicked': menu.lastClicked?.toIso8601String(),
+        'popularityLevel': menu.popularityLevel,
+      };
+    }
+
+    return stats;
   }
 
   // ========== 레시피 관련 메서드들 ==========
