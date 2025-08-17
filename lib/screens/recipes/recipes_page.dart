@@ -101,6 +101,8 @@ class _RecipesPageState extends State<RecipesPage> {
 
   @override
   void dispose() {
+    // 페이지 종료 시 모든 SnackBar 제거
+    _clearAllSnackBars();
     _searchController.dispose();
     _focusNode.dispose();
     _chipController.dispose();
@@ -343,19 +345,54 @@ class _RecipesPageState extends State<RecipesPage> {
     _showInfoSnackBar('${recipe.title} 상세보기');
   }
 
-  // ========== 스낵바 헬퍼들 ==========
+  // ========== 개선된 스낵바 헬퍼들 ==========
 
-  /// 오류 스낵바
-  void _showErrorSnackBar(String message) {
+  /// 모든 SnackBar를 즉시 제거하는 메서드
+  void _clearAllSnackBars() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
+  }
+
+  /// 기존 SnackBar 제거 후 새 SnackBar 표시하는 공통 메서드
+  void _showSnackBar({
+    required String message,
+    required Color backgroundColor,
+    Duration duration = const Duration(milliseconds: 1500), // 기본 1.5초로 단축
+  }) {
+    if (!mounted) return;
+
+    // 기존 SnackBar를 즉시 제거
+    _clearAllSnackBars();
+
+    // 새 SnackBar 표시
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+        duration: duration,
+        behavior: SnackBarBehavior.floating, // 플로팅 스타일로 더 빠른 반응성
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
     );
   }
 
-  /// 정보 스낵바
+  /// 오류 스낵바 (개선됨)
+  void _showErrorSnackBar(String message) {
+    _showSnackBar(
+      message: message,
+      backgroundColor: Colors.red,
+      duration: const Duration(milliseconds: 2000), // 오류 메시지는 조금 더 길게
+    );
+  }
+
+  /// 정보 스낵바 (개선됨)
   void _showInfoSnackBar(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    _showSnackBar(
+      message: message,
+      backgroundColor: Colors.blue.shade600,
+      duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본 길이
+    );
   }
 }
