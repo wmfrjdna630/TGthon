@@ -319,7 +319,10 @@ class _FridgePageState extends State<FridgePage> {
         builder: (context, setDialogState) => AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.add_circle_outline, color: Colors.green),
+              Icon(
+                Icons.add_circle_outline,
+                color: Color.fromARGB(255, 30, 0, 255),
+              ),
               SizedBox(width: 8),
               Text('새 아이템 추가'),
             ],
@@ -537,7 +540,7 @@ class _FridgePageState extends State<FridgePage> {
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
+                backgroundColor: Color.fromARGB(255, 30, 0, 255),
                 foregroundColor: Colors.white,
               ),
               child: const Text('추가'),

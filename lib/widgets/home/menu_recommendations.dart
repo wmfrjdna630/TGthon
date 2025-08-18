@@ -129,15 +129,21 @@ class _SortChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue[100] : Colors.grey[200],
+          color: isSelected
+              ? Color.fromARGB(255, 30, 0, 255)
+              : Colors.grey[200],
           borderRadius: BorderRadius.circular(12),
-          border: isSelected ? Border.all(color: Colors.blue) : null,
+          border: isSelected
+              ? Border.all(color: Color.fromARGB(255, 30, 0, 255))
+              : null,
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 10,
-            color: isSelected ? Colors.blue[800] : Colors.black87,
+            color: isSelected
+                ? const Color.fromARGB(255, 255, 255, 255)
+                : Colors.black87,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
