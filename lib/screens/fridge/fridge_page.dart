@@ -167,7 +167,7 @@ class _FridgePageState extends State<FridgePage> {
       // 오른쪽 하단 FAB 추가
       floatingActionButton: FloatingActionButton(
         onPressed: _onAddItemPressed,
-        backgroundColor: const Color(0xFF2196F3), // 파랑색
+        backgroundColor: const Color.fromARGB(255, 30, 0, 255), // 파랑색
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),

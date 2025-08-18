@@ -8,13 +8,13 @@ class AppColors {
   // ========== 기본 브랜드 색상 (하늘색/파랑색 테마) ==========
 
   /// 메인 브랜드 색상 (파랑색) - 상단/하단 바용
-  static const Color primary = Color(0xFF2196F3);
+  static const Color primary = Color.fromARGB(255, 30, 0, 255);
 
   /// 메인 색상의 밝은 버전 (밝은 파랑)
   static const Color primaryLight = Color(0xFF64B5F6);
 
   /// 메인 색상의 어두운 버전 (진한 파랑)
-  static const Color primaryDark = Color(0xFF1976D2);
+  static const Color primaryDark = Color.fromARGB(255, 30, 0, 255);
 
   // ========== 상태별 색상 ==========
 
@@ -28,7 +28,7 @@ class AppColors {
   static const Color success = Color(0xFF2ECC71);
 
   /// 정보 상태
-  static const Color info = Color(0xFF3498DB);
+  static const Color info = Color.fromARGB(255, 30, 0, 255);
 
   // ========== 배경 색상 (하늘색 테마) ==========
 

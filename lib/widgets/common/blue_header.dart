@@ -62,7 +62,7 @@ class BlueHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       decoration: const BoxDecoration(
-        color: Color(0xFF2196F3), // 파랑색 배경
+        color: Color.fromARGB(255, 30, 0, 255), // 파랑색 배경
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(32),
           bottomRight: Radius.circular(32),
