@@ -145,19 +145,19 @@ class AppColors {
   // ========== 투명도 변형 ==========
 
   /// 메인 색상 10% 투명도
-  static Color get primaryWithOpacity10 => primary.withOpacity(0.1);
+  static Color get primaryWithOpacity10 => primary.withValues(alpha: 0.1);
 
   /// 메인 색상 20% 투명도
-  static Color get primaryWithOpacity20 => primary.withOpacity(0.2);
+  static Color get primaryWithOpacity20 => primary.withValues(alpha: 0.2);
 
   /// 위험 색상 10% 투명도
-  static Color get dangerWithOpacity10 => danger.withOpacity(0.1);
+  static Color get dangerWithOpacity10 => danger.withValues(alpha: 0.1);
 
   /// 경고 색상 10% 투명도
-  static Color get warningWithOpacity10 => warning.withOpacity(0.1);
+  static Color get warningWithOpacity10 => warning.withValues(alpha: 0.1);
 
   /// 성공 색상 10% 투명도
-  static Color get successWithOpacity10 => success.withOpacity(0.1);
+  static Color get successWithOpacity10 => success.withValues(alpha: 0.1);
 
   // ========== 유틸리티 메서드들 ==========
 

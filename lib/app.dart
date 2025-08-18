@@ -14,11 +14,10 @@ class App extends StatelessWidget {
 
       // 앱 테마 설정 (파랑색 테마)
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2196F3), // 메인 파랑색
-          background: const Color(0xFFF0F8FF), // 연한 하늘색 배경
-        ),
         useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF2196F3), // 메인 파랑색 // 연한 하늘색 배경
+        ).copyWith(surface: const Color(0xFFF0F8FF)),
 
         // 전체 배경색 설정
         scaffoldBackgroundColor: const Color(0xFFF0F8FF), // 연한 하늘색
@@ -63,7 +62,9 @@ class App extends StatelessWidget {
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
-          shadowColor: const Color(0xFF2196F3).withOpacity(0.1), // 파랑색 그림자
+          shadowColor: const Color(
+            0xFF2196F3,
+          ).withValues(alpha: 0.1), // 파랑색 그림자
         ),
 
         // FloatingActionButton 테마
@@ -97,14 +98,14 @@ class App extends StatelessWidget {
 
         // Switch/Checkbox 테마
         switchTheme: SwitchThemeData(
-          thumbColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
+          thumbColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return const Color(0xFF2196F3); // 파랑색
             }
             return Colors.grey;
           }),
-          trackColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
+          trackColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return const Color(0xFF64B5F6); // 밝은 파랑
             }
             return Colors.grey.shade300;
@@ -112,13 +113,13 @@ class App extends StatelessWidget {
         ),
 
         checkboxTheme: CheckboxThemeData(
-          fillColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
+          fillColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return const Color(0xFF2196F3); // 파랑색
             }
             return Colors.transparent;
           }),
-          checkColor: MaterialStateProperty.all(Colors.white),
+          checkColor: WidgetStateProperty.all(Colors.white),
         ),
       ),
 

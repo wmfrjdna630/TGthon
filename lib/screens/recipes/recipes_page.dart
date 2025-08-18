@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../widgets/common/blue_header.dart'; // green_header에서 blue_header로 변경
-import '../../widgets/common/custom_search_bar.dart';
 import '../../widgets/recipes/recipe_filter_chips.dart';
 import '../../widgets/recipes/chip_scrollbar.dart';
 import '../../widgets/recipes/recipe_card.dart';
@@ -336,12 +335,14 @@ class _RecipesPageState extends State<RecipesPage> {
 
   /// 필터 버튼 처리 (검색바 우측)
   void _onFilterPressed() {
+    // ignore: todo
     // TODO: 고급 필터 다이얼로그 또는 설정 페이지
     _showInfoSnackBar('고급 필터 기능은 준비 중입니다');
   }
 
   /// 레시피 탭 처리
   void _onRecipeTapped(Recipe recipe) {
+    // ignore: todo
     // TODO: 레시피 상세보기 페이지 이동
     _showInfoSnackBar('${recipe.title} 상세보기');
   }

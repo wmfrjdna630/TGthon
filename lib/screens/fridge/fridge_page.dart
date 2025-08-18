@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../widgets/common/blue_header.dart'; // green_header에서 blue_header로 변경
-import '../../widgets/common/custom_search_bar.dart';
 import '../../widgets/fridge/fridge_filter_bar.dart';
 import '../../widgets/fridge/fridge_item_card.dart';
 import '../../data/mock_repository.dart';
@@ -280,12 +279,14 @@ class _FridgePageState extends State<FridgePage> {
 
   /// 아이템 탭 처리
   void _onItemTapped(FridgeItem item) {
+    // ignore: todo
     // TODO: 아이템 상세보기 다이얼로그 또는 페이지 이동
     _showInfoSnackBar('${item.name} 상세보기');
   }
 
   /// 아이템 수정 처리
   void _onItemEdit(FridgeItem item) {
+    // ignore: todo
     // TODO: 아이템 수정 다이얼로그
     _showInfoSnackBar('${item.name} 수정 기능은 준비 중입니다');
   }
@@ -296,67 +297,6 @@ class _FridgePageState extends State<FridgePage> {
   }
 
   // ========== 다이얼로그 및 스낵바 ==========
-
-  /// 남은 일수 계산
-  int _calculateDaysLeft(DateTime expiryDate) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final expiry = DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
-    return expiry.difference(today).inDays;
-  }
-
-  /// 새 아이템 추가 실행
-  Future<void> _addNewItem({
-    required String name,
-    required String amount,
-    required String unit,
-    required String category,
-    required String location,
-    required DateTime expiryDate,
-  }) async {
-    try {
-      final daysLeft = _calculateDaysLeft(expiryDate);
-      final totalDays = _estimateTotalDays(category);
-
-      final newItem = FridgeItem.fromSampleData(
-        name: name,
-        amount: '$amount$unit',
-        category: category,
-        location: location,
-        daysLeft: daysLeft,
-        totalDays: totalDays,
-      );
-
-      await _repository.addFridgeItem(newItem);
-      _loadFridgeItems(); // 리스트 새로고침
-      _showSuccessSnackBar('$name이(가) 추가되었습니다');
-    } catch (e) {
-      _showErrorSnackBar('아이템 추가에 실패했습니다');
-    }
-  }
-
-  /// 카테고리에 따른 예상 총 유통기한 계산
-  int _estimateTotalDays(String category) {
-    switch (category) {
-      case '채소':
-      case '과일':
-        return 14; // 2주
-      case '육류':
-      case '생선':
-        return 7; // 1주
-      case '유제품':
-        return 10; // 10일
-      case '곡류':
-      case '조미료':
-        return 365; // 1년
-      case '음료':
-        return 30; // 1개월
-      case '냉동식품':
-        return 90; // 3개월
-      default:
-        return 30; // 기본 1개월
-    }
-  }
 
   /// 삭제 확인 다이얼로그
   void _showDeleteConfirmDialog(FridgeItem item) {

@@ -158,7 +158,7 @@ class _DynamicHeaderState extends State<DynamicHeader>
         _HeaderMessage(
           icon: Icons.kitchen,
           title: '냉장고 관리가 필요해요',
-          subtitle: '${weekItems}개 재료의 유통기한을 확인해보세요',
+          subtitle: '$weekItems개 재료의 유통기한을 확인해보세요',
           color: Colors.orange,
           backgroundColor: Colors.orange.shade50,
         ),
@@ -200,12 +200,12 @@ class _DynamicHeaderState extends State<DynamicHeader>
             color: Colors.white, // 흰색 배경
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: currentMessage.color.withOpacity(0.2),
+              color: currentMessage.color.withValues(alpha: 0.2),
               width: 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),

@@ -69,7 +69,7 @@ class _NavItemWidget extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(30),
-          splashColor: Colors.black12.withOpacity(0.05),
+          splashColor: Colors.black12.withValues(alpha: 0.05),
           highlightColor: Colors.transparent,
           onTap: onTap,
           child: AnimatedContainer(

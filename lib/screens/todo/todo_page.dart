@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../widgets/common/blue_header.dart'; // green_header에서 blue_header로 변경
-import '../../widgets/common/custom_search_bar.dart';
 import '../../widgets/common/filter_chips.dart';
 import '../../data/mock_repository.dart';
 import '../../core/constants/app_colors.dart';
@@ -359,6 +358,7 @@ class _TodoPageState extends State<TodoPage> {
 
   /// 할일 탭 처리
   void _onTodoTapped(TodoItem todo) {
+    // ignore: todo
     // TODO: 할일 상세보기 또는 편집 다이얼로그
     _showInfoSnackBar('${todo.title} 상세보기');
   }
@@ -695,9 +695,9 @@ class _PriorityChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         priority.label,

@@ -151,8 +151,9 @@ class AddItemDialog {
                       firstDate: DateTime.now(),
                       lastDate: DateTime.now().add(const Duration(days: 365)),
                     );
-                    if (picked != null)
+                    if (picked != null) {
                       setDialogState(() => selectedExpiryDate = picked);
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.all(12),
@@ -183,8 +184,9 @@ class AddItemDialog {
             ElevatedButton(
               onPressed: () {
                 if (nameController.text.trim().isEmpty ||
-                    amountController.text.trim().isEmpty)
+                    amountController.text.trim().isEmpty) {
                   return;
+                }
                 Navigator.pop(
                   context,
                   FridgeItem.fromSampleData(

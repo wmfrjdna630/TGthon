@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../widgets/common/custom_search_bar.dart';
 import '../../widgets/home/expiry_indicator_bar.dart';
 import '../../widgets/home/dynamic_header.dart'; // 새로운 동적 헤더 추가
 import '../../widgets/home/fridge_timeline.dart';
@@ -144,7 +143,7 @@ class _HomePageState extends State<HomePage> {
                   DynamicHeader(
                     fridgeItems: _allFridgeItems,
                     menuRecommendations: _sortedMenus,
-                    todoCount: 3, // TODO: 실제 TODO 개수로 교체
+                    todoCount: 3, // ignore: todo // TODO: 실제 TODO 개수로 교체
                   ),
 
                   const SizedBox(height: 16),
@@ -211,6 +210,7 @@ class _HomePageState extends State<HomePage> {
 
   /// 검색 텍스트 변경 처리
   void _onSearchChanged(String query) {
+    // ignore: todo
     // TODO: 검색 기능 구현
     // 메뉴나 재료 검색 로직 추가
     setState(() {
@@ -254,6 +254,7 @@ class _HomePageState extends State<HomePage> {
         '${menu.title} 레시피 보기 (클릭: ${menu.clickCount + 1}회)',
       );
 
+      // ignore: todo
       // TODO: 실제 레시피 상세보기 페이지로 이동
       // Navigator.push(context, MaterialPageRoute(builder: (context) => RecipeDetailPage(menu: menu)));
     } catch (e) {
@@ -350,6 +351,7 @@ class _HomePageState extends State<HomePage> {
 
   /// Quick Action FAB 처리 (새로 추가)
   void _onQuickActionPressed() {
+    // ignore: todo
     // TODO: Quick Action 선택 다이얼로그 또는 메뉴 표시
     _showQuickActionDialog();
   }
