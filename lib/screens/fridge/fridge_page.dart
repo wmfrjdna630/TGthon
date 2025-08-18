@@ -123,8 +123,8 @@ class _FridgePageState extends State<FridgePage> {
                 // 상단 헤더 (+ 버튼 제거)
                 BlueHeader(
                   icon: Icons.kitchen,
-                  title: 'My Fridge',
-                  subtitle: '${_filterCounts['All'] ?? 0} items stored',
+                  title: '나의 냉장고',
+                  subtitle: '${_filterCounts['All'] ?? 0} 개의 재료가 있어요!',
                 ),
 
                 // 메인 콘텐츠
@@ -237,6 +237,10 @@ class _FridgePageState extends State<FridgePage> {
           if (_selectedFilter == 'All' && _searchController.text.isEmpty) ...[
             const SizedBox(height: 24),
             ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color.fromARGB(255, 30, 0, 255), // 버튼 배경색
+                foregroundColor: Colors.white, // 텍스트 + 아이콘 색상
+              ),
               onPressed: _onAddItemPressed,
               icon: const Icon(Icons.add),
               label: const Text('아이템 추가'),
@@ -370,7 +374,7 @@ class _FridgePageState extends State<FridgePage> {
   void _showSuccessSnackBar(String message) {
     _showSnackBar(
       message: message,
-      backgroundColor: Colors.green,
+      backgroundColor: const Color.fromARGB(255, 30, 0, 255),
       duration: const Duration(milliseconds: 1200), // 성공 메시지는 더 짧게
     );
   }
@@ -388,7 +392,7 @@ class _FridgePageState extends State<FridgePage> {
   void _showInfoSnackBar(String message) {
     _showSnackBar(
       message: message,
-      backgroundColor: Colors.blue.shade600,
+      backgroundColor: Color.fromARGB(255, 30, 0, 255),
       duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본 길이
     );
   }

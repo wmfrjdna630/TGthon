@@ -108,10 +108,10 @@ class AppColors {
   static const Color menuMissing = Color(0xFFFFF3E0);
 
   /// 모든 재료 보유 시 테두리색 (파랑)
-  static const Color menuAvailableBorder = Color(0xFF2196F3);
+  static const Color menuAvailableBorder = Color(0xFFE8F4FD);
 
   /// 재료 부족 시 테두리색 (주황)
-  static const Color menuMissingBorder = Color(0xFFFF9800);
+  static const Color menuMissingBorder = Color(0xFFFFF3E0);
 
   // ========== 진행률 바 색상 (파랑 테마) ==========
 
@@ -157,7 +157,8 @@ class AppColors {
   static Color get warningWithOpacity10 => warning.withValues(alpha: 0.1);
 
   /// 성공 색상 10% 투명도
-  static Color get successWithOpacity10 => success.withValues(alpha: 0.1);
+  static Color get successWithOpacity10 =>
+      const Color.fromARGB(255, 0, 0, 255).withValues(alpha: 0.1);
 
   // ========== 유틸리티 메서드들 ==========
 

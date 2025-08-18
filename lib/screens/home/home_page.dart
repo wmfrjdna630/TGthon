@@ -326,7 +326,7 @@ class _HomePageState extends State<HomePage> {
   void _showSuccessSnackBar(String message) {
     _showSnackBar(
       message: message,
-      backgroundColor: Colors.green,
+      backgroundColor: Color.fromARGB(255, 30, 0, 255),
       duration: const Duration(milliseconds: 1200), // 성공 메시지는 더 짧게
     );
   }

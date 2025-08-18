@@ -30,6 +30,7 @@ class AddItemDialog {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.white,
           title: const Row(
             children: [
               Icon(
@@ -182,6 +183,10 @@ class AddItemDialog {
               child: const Text('취소'),
             ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color.fromARGB(255, 30, 0, 255),
+                foregroundColor: Colors.white,
+              ),
               onPressed: () {
                 if (nameController.text.trim().isEmpty ||
                     amountController.text.trim().isEmpty) {
