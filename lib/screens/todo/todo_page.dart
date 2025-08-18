@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../widgets/common/green_header.dart';
+import '../../widgets/common/blue_header.dart'; // green_header에서 blue_header로 변경
 import '../../widgets/common/custom_search_bar.dart';
 import '../../widgets/common/filter_chips.dart';
 import '../../data/mock_repository.dart';
@@ -152,66 +152,70 @@ class _TodoPageState extends State<TodoPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
-          child: Column(
-            children: [
-              // 상단 헤더
-              GreenHeader(
-                icon: Icons.check_box,
-                title: 'To-Do',
-                subtitle: '${_filterCounts['pending'] ?? 0}개의 할일이 남았습니다',
-                trailing: FloatingActionButton(
-                  mini: true,
-                  backgroundColor: AppColors.primaryLight,
-                  onPressed: _onAddTodoPressed,
-                  child: const Icon(Icons.add, color: Colors.white),
+    return Scaffold(
+      // Scaffold로 감싸서 FAB 사용 가능하게 함
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Column(
+              children: [
+                // 상단 헤더 (+ 버튼 제거)
+                BlueHeader(
+                  icon: Icons.check_box,
+                  title: 'To-Do',
+                  subtitle: '${_filterCounts['pending'] ?? 0}개의 할일이 남았습니다',
                 ),
-                onTrailingTap: _onAddTodoPressed,
-              ),
 
-              // 메인 콘텐츠
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 24),
+                // 메인 콘텐츠
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 24),
 
-                      // 검색바
-                      CustomSearchBar.home(
-                        controller: _searchController,
-                        onChanged: _onSearchChanged,
-                      ),
+                        // 검색바
+                        CustomSearchBar.home(
+                          controller: _searchController,
+                          onChanged: _onSearchChanged,
+                        ),
 
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                      // 필터 칩들
-                      FilterChips.withCounts(
-                        labelCounts: {
-                          '전체': _filterCounts['all'] ?? 0,
-                          '진행중': _filterCounts['pending'] ?? 0,
-                          '완료': _filterCounts['completed'] ?? 0,
-                          '긴급': _filterCounts['high'] ?? 0,
-                        },
-                        selectedLabel: _getFilterLabel(_selectedFilter),
-                        onLabelSelected: (label) =>
-                            _onFilterChanged(_getFilterKey(label)),
-                      ),
+                        // 필터 칩들
+                        FilterChips.withCounts(
+                          labelCounts: {
+                            '전체': _filterCounts['all'] ?? 0,
+                            '진행중': _filterCounts['pending'] ?? 0,
+                            '완료': _filterCounts['completed'] ?? 0,
+                            '긴급': _filterCounts['high'] ?? 0,
+                          },
+                          selectedLabel: _getFilterLabel(_selectedFilter),
+                          onLabelSelected: (label) =>
+                              _onFilterChanged(_getFilterKey(label)),
+                        ),
 
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 16),
 
-                      // 할일 리스트
-                      Expanded(child: _buildTodosList()),
-                    ],
+                        // 할일 리스트
+                        Expanded(child: _buildTodosList()),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+
+      // 오른쪽 하단 FAB 추가 (동그라미 모양)
+      floatingActionButton: FloatingActionButton(
+        onPressed: _onAddTodoPressed,
+        backgroundColor: const Color(0xFF2196F3), // 파랑색
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -303,7 +307,7 @@ class _TodoPageState extends State<TodoPage> {
               icon: const Icon(Icons.add),
               label: const Text('할일 추가'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: const Color(0xFF2196F3), // 파랑색
                 foregroundColor: Colors.white,
               ),
             ),

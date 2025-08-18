@@ -41,8 +41,8 @@ class _HomePageState extends State<HomePage> {
   /// 목 데이터 저장소 (즐겨찾기 토글을 위해 추가)
   final MockRepository _repository = MockRepository();
 
-  /// 메뉴 추천 리스트 (상태로 관리)
-  List<MenuRec> _menuRecommendations = [];
+  /// 메뉴 추천 리스트 (Repository를 통해 관리, 초기값은 샘플 데이터)
+  List<MenuRec> _menuRecommendations = SampleData.menuRecommendations;
 
   // ========== 데이터 접근자들 ==========
 
@@ -61,11 +61,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 필터링된 냉장고 아이템들
+  /// 필터링된 냉장고 아이템들 (통합 데이터에서 필터링)
   List<FridgeItem> get _filteredFridgeItems {
-    return _allFridgeItems
-        .where((item) => item.daysLeft <= _maxDaysForFilter)
-        .toList();
+    return SampleData.getFridgeItemsByTimeFilter(_maxDaysForFilter);
   }
 
   /// 정렬된 메뉴 추천들 (actualFrequency 반영)

@@ -73,7 +73,9 @@ class _NavItemWidget extends StatelessWidget {
         curve: Curves.easeInOut,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.navSelected : Colors.transparent,
+          color: isSelected
+              ? const Color.fromARGB(255, 0, 98, 255)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(

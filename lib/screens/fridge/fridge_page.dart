@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../widgets/common/green_header.dart';
+import '../../widgets/common/blue_header.dart'; // green_header에서 blue_header로 변경
 import '../../widgets/common/custom_search_bar.dart';
 import '../../widgets/fridge/fridge_filter_bar.dart';
 import '../../widgets/fridge/fridge_item_card.dart';
@@ -111,53 +111,65 @@ class _FridgePageState extends State<FridgePage> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
-          child: Column(
-            children: [
-              // 상단 헤더
-              GreenHeader.fridge(
-                itemCount: _filterCounts['All'] ?? 0,
-                onAddPressed: _onAddItemPressed,
-              ),
+    return Scaffold(
+      // Scaffold로 감싸서 FAB 사용 가능하게 함
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Column(
+              children: [
+                // 상단 헤더 (+ 버튼 제거)
+                BlueHeader(
+                  icon: Icons.kitchen,
+                  title: 'My Fridge',
+                  subtitle: '${_filterCounts['All'] ?? 0} items stored',
+                ),
 
-              // 메인 콘텐츠
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 24),
+                // 메인 콘텐츠
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 24),
 
-                      // 검색바
-                      CustomSearchBar.fridge(
-                        controller: _searchController,
-                        onChanged: _onSearchChanged,
-                        focusNode: _focusNode,
-                      ),
+                        // 검색바
+                        CustomSearchBar.fridge(
+                          controller: _searchController,
+                          onChanged: _onSearchChanged,
+                          focusNode: _focusNode,
+                        ),
 
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                      // 위치 필터바
-                      FridgeFilterBar(
-                        selectedFilter: _selectedFilter,
-                        filterCounts: _filterCounts,
-                        onFilterChanged: _onFilterChanged,
-                      ),
+                        // 위치 필터바
+                        FridgeFilterBar(
+                          selectedFilter: _selectedFilter,
+                          filterCounts: _filterCounts,
+                          onFilterChanged: _onFilterChanged,
+                        ),
 
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
 
-                      // 아이템 리스트
-                      Expanded(child: _buildItemsList()),
-                    ],
+                        // 아이템 리스트
+                        Expanded(child: _buildItemsList()),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+
+      // 오른쪽 하단 FAB 추가
+      floatingActionButton: FloatingActionButton(
+        onPressed: _onAddItemPressed,
+        backgroundColor: const Color(0xFF2196F3), // 파랑색
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.add),
       ),
     );
   }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../widgets/common/green_header.dart';
+import '../../widgets/common/blue_header.dart'; // green_header에서 blue_header로 변경
 import '../../widgets/common/custom_search_bar.dart';
 import '../../widgets/recipes/recipe_filter_chips.dart';
 import '../../widgets/recipes/chip_scrollbar.dart';
@@ -154,8 +154,8 @@ class _RecipesPageState extends State<RecipesPage> {
           constraints: const BoxConstraints(maxWidth: 500),
           child: Column(
             children: [
-              // 상단 헤더
-              GreenHeader.recipes(
+              // 상단 헤더 (BlueHeader로 변경)
+              BlueHeader.recipes(
                 readyCount: _canMakeCount,
                 almostCount: _almostReadyCount,
               ),
