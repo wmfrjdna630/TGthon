@@ -25,7 +25,7 @@ class CustomBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: _navItems.asMap().entries.map((entry) {
@@ -74,9 +74,9 @@ class _NavItemWidget extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color.fromARGB(255, 0, 98, 255)
+              ? const Color.fromARGB(255, 255, 255, 255)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(30),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -84,18 +84,21 @@ class _NavItemWidget extends StatelessWidget {
             // 아이콘
             Icon(
               item.icon,
-              color: isSelected ? Colors.white : AppColors.navUnselected,
+              color: isSelected
+                  ? const Color.fromARGB(255, 4, 0, 255)
+                  : AppColors.navUnselected,
             ),
 
-            const SizedBox(height: 4),
-
+            const SizedBox(height: 4), // 아이콘과 라벨 사이의 간격
             // 라벨
             Text(
               item.label,
               style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.navUnselected,
+                color: isSelected
+                    ? const Color.fromARGB(255, 0, 0, 255)
+                    : AppColors.navUnselected,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                fontSize: 13,
+                fontSize: 10,
               ),
             ),
           ],
