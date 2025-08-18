@@ -14,13 +14,10 @@ class MockRepository {
   factory MockRepository() => _instance;
   MockRepository._internal();
 
-  // ========== 데이터 스토리지 ==========
+  // ========== 데이터 스토리지 (통합된 데이터 사용) ==========
 
-  /// 냉장고 아이템들 (수정 가능한 복사본)
+  /// 냉장고 아이템들 (통합된 데이터 사용 - 타임라인과 냉장고 페이지 공통)
   final List<FridgeItem> _fridgeItems = [...SampleData.fridgeItems];
-
-  /// 타임라인용 아이템들 (수정 가능한 복사본)
-  final List<FridgeItem> _timelineItems = [...SampleData.timelineItems];
 
   /// 메뉴 추천들 (수정 가능한 복사본)
   final List<MenuRec> _menuRecommendations = [
@@ -94,10 +91,10 @@ class MockRepository {
     return _fridgeItems.where((item) => item.location == location).toList();
   }
 
-  /// 타임라인용 아이템 조회
+  /// 타임라인용 아이템 조회 (통합된 데이터 사용)
   Future<List<FridgeItem>> getTimelineItems() async {
     await _simulateNetworkDelay();
-    return List.from(_timelineItems);
+    return List.from(_fridgeItems); // 동일한 데이터 사용
   }
 
   /// 냉장고 아이템 추가
@@ -278,21 +275,21 @@ class MockRepository {
 
   // ========== 통계 관련 메서드들 ==========
 
-  /// 냉장고 아이템 통계
+  /// 냉장고 아이템 통계 (통합된 데이터 사용)
   Future<Map<String, int>> getFridgeStats() async {
     await _simulateNetworkDelay();
 
     final stats = <String, int>{
-      'total': _timelineItems.length,
+      'total': _fridgeItems.length,
       'danger': 0,
       'warning': 0,
       'safe': 0,
     };
 
-    for (final item in _timelineItems) {
-      if (item.daysLeft <= 3) {
+    for (final item in _fridgeItems) {
+      if (item.daysLeft <= 7) {
         stats['danger'] = (stats['danger'] ?? 0) + 1;
-      } else if (item.daysLeft <= 7) {
+      } else if (item.daysLeft <= 28) {
         stats['warning'] = (stats['warning'] ?? 0) + 1;
       } else {
         stats['safe'] = (stats['safe'] ?? 0) + 1;
@@ -322,13 +319,10 @@ class MockRepository {
     await Future.delayed(const Duration(milliseconds: 300));
   }
 
-  /// 모든 데이터 초기화
+  /// 모든 데이터 초기화 (통합된 데이터 사용)
   Future<void> resetAllData() async {
     _fridgeItems.clear();
     _fridgeItems.addAll(SampleData.fridgeItems);
-
-    _timelineItems.clear();
-    _timelineItems.addAll(SampleData.timelineItems);
 
     _menuRecommendations.clear();
     _menuRecommendations.addAll(SampleData.menuRecommendations);

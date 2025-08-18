@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import '../../widgets/common/custom_search_bar.dart';
 import '../../widgets/home/expiry_indicator_bar.dart';
-import '../../widgets/home/quick_actions_card.dart';
+import '../../widgets/home/dynamic_header.dart'; // 새로운 동적 헤더 추가
 import '../../widgets/home/fridge_timeline.dart';
 import '../../widgets/home/menu_recommendations.dart';
 import '../../data/sample_data.dart';
 import '../../data/mock_repository.dart'; // MockRepository 추가
 import '../../models/fridge_item.dart';
 import '../../models/menu_rec.dart';
+import '../../widgets/common/add_item_dialog.dart'; // 공용 추가 다이얼로그
+import '../../widgets/common/compact_search_bar.dart';
 
 /// 홈페이지 - 메인 대시보드
 /// 냉장고 상태, 타임라인, 메뉴 추천 등을 종합적으로 보여주는 페이지
@@ -41,8 +42,8 @@ class _HomePageState extends State<HomePage> {
   /// 목 데이터 저장소 (즐겨찾기 토글을 위해 추가)
   final MockRepository _repository = MockRepository();
 
-  /// 메뉴 추천 리스트 (상태로 관리)
-  List<MenuRec> _menuRecommendations = [];
+  /// 메뉴 추천 리스트 (Repository를 통해 관리, 초기값은 샘플 데이터)
+  List<MenuRec> _menuRecommendations = SampleData.menuRecommendations;
 
   // ========== 데이터 접근자들 ==========
 
@@ -61,11 +62,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 필터링된 냉장고 아이템들
+  /// 필터링된 냉장고 아이템들 (통합 데이터에서 필터링)
   List<FridgeItem> get _filteredFridgeItems {
-    return _allFridgeItems
-        .where((item) => item.daysLeft <= _maxDaysForFilter)
-        .toList();
+    return SampleData.getFridgeItemsByTimeFilter(_maxDaysForFilter);
   }
 
   /// 정렬된 메뉴 추천들 (actualFrequency 반영)
@@ -128,64 +127,81 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 24),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500),
-            child: Column(
-              children: [
-                const SizedBox(height: 16),
+    return Scaffold(
+      // Scaffold로 감싸서 FAB 사용 가능하게 함
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
 
-                // 상단 유통기한 상태 표시바
-                ExpiryIndicatorBar(fridgeItems: _allFridgeItems),
-
-                const SizedBox(height: 16),
-
-                // 메인 콘텐츠 영역
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    children: [
-                      // 검색바
-                      CustomSearchBar.home(
-                        controller: _searchController,
-                        onChanged: _onSearchChanged,
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // 빠른 액션 카드
-                      const QuickActionsCard(),
-
-                      const SizedBox(height: 24),
-
-                      // 냉장고 타임라인
-                      FridgeTimeline(
-                        userName: widget.userName,
-                        fridgeItems: _filteredFridgeItems,
-                        currentFilter: _timeFilter,
-                        onFilterChanged: _onTimeFilterChanged,
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // 메뉴 추천 (클릭 이벤트 핸들러 추가)
-                      MenuRecommendations(
-                        menuRecommendations: _sortedMenus,
-                        currentSortMode: _sortMode,
-                        onSortModeChanged: _onSortModeChanged,
-                        onMenuTapped: _onMenuTapped, // 메뉴 클릭 핸들러
-                        onFavoriteToggled: _onFavoriteToggled, // 즐겨찾기 토글 핸들러
-                      ),
-                    ],
+                  // 동적 헤더 (새로 추가)
+                  DynamicHeader(
+                    fridgeItems: _allFridgeItems,
+                    menuRecommendations: _sortedMenus,
+                    todoCount: 3, // ignore: todo // TODO: 실제 TODO 개수로 교체
                   ),
-                ),
-              ],
+
+                  const SizedBox(height: 16),
+
+                  // 상단 유통기한 상태 표시바
+                  ExpiryIndicatorBar(fridgeItems: _allFridgeItems),
+
+                  const SizedBox(height: 16),
+
+                  // 메인 콘텐츠 영역
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: Column(
+                      children: [
+                        // 검색바
+                        CompactSearchBar(
+                          controller: _searchController,
+                          onChanged: _onSearchChanged,
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Quick Actions 삭제됨
+
+                        // 냉장고 타임라인
+                        FridgeTimeline(
+                          userName: widget.userName,
+                          fridgeItems: _filteredFridgeItems,
+                          currentFilter: _timeFilter,
+                          onFilterChanged: _onTimeFilterChanged,
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // 메뉴 추천 (클릭 이벤트 핸들러 추가)
+                        MenuRecommendations(
+                          menuRecommendations: _sortedMenus,
+                          currentSortMode: _sortMode,
+                          onSortModeChanged: _onSortModeChanged,
+                          onMenuTapped: _onMenuTapped, // 메뉴 클릭 핸들러
+                          onFavoriteToggled: _onFavoriteToggled, // 즐겨찾기 토글 핸들러
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+      ),
+
+      // 오른쪽 하단 FAB 추가 (Quick Actions 대체)
+      floatingActionButton: FloatingActionButton(
+        onPressed: _onQuickActionPressed,
+        backgroundColor: const Color.fromARGB(255, 30, 0, 255), // 파랑색
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -194,6 +210,7 @@ class _HomePageState extends State<HomePage> {
 
   /// 검색 텍스트 변경 처리
   void _onSearchChanged(String query) {
+    // ignore: todo
     // TODO: 검색 기능 구현
     // 메뉴나 재료 검색 로직 추가
     setState(() {
@@ -233,8 +250,11 @@ class _HomePageState extends State<HomePage> {
       });
 
       // 3. 사용자에게 피드백 제공
-      _showInfoSnackBar('${menu.title} 레시피 보기 (클릭: ${menu.clickCount + 1}회)');
+      _showSuccessSnackBar(
+        '${menu.title} 레시피 보기 (클릭: ${menu.clickCount + 1}회)',
+      );
 
+      // ignore: todo
       // TODO: 실제 레시피 상세보기 페이지로 이동
       // Navigator.push(context, MaterialPageRoute(builder: (context) => RecipeDetailPage(menu: menu)));
     } catch (e) {
@@ -324,8 +344,78 @@ class _HomePageState extends State<HomePage> {
   void _showInfoSnackBar(String message) {
     _showSnackBar(
       message: message,
-      backgroundColor: Colors.blue.shade600,
-      duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본 길이
+      backgroundColor: Color.fromARGB(255, 30, 0, 255),
+      duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본값
+    );
+  }
+
+  /// Quick Action FAB 처리 (새로 추가)
+  void _onQuickActionPressed() {
+    // ignore: todo
+    // TODO: Quick Action 선택 다이얼로그 또는 메뉴 표시
+    _showQuickActionDialog();
+  }
+
+  /// Quick Action 선택 다이얼로그 (새로 추가)
+  void _showQuickActionDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Quick Actions',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+
+            // Add Item 버튼
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Color.fromARGB(255, 30, 0, 255),
+                child: Icon(Icons.add, color: Colors.white),
+              ),
+              title: const Text('Add Item'),
+              subtitle: const Text('냉장고에 새 아이템 추가'),
+              onTap: () async {
+                Navigator.pop(context); // 바텀시트 닫기
+
+                final newItem = await AddItemDialog.show(context);
+                if (newItem != null) {
+                  try {
+                    await _repository.addFridgeItem(newItem);
+                    _showSuccessSnackBar('${newItem.name}이(가) 추가되었습니다');
+                    // 참고: 목록 새로고침은 필요시 상태 변수로 관리하거나 FridgePage에 위임
+                  } catch (e) {
+                    _showErrorSnackBar('아이템 추가에 실패했습니다');
+                  }
+                }
+              },
+            ),
+
+            // Scan Receipt 버튼
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Color.fromARGB(255, 30, 0, 255),
+                child: Icon(Icons.camera_alt, color: Colors.white),
+              ),
+              title: const Text('Scan Receipt'),
+              subtitle: const Text('영수증 스캔으로 한 번에 추가'),
+              onTap: () {
+                Navigator.pop(context);
+                _showInfoSnackBar('영수증 스캔 기능');
+              },
+            ),
+
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
     );
   }
 }

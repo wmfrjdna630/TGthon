@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../widgets/common/green_header.dart';
-import '../../widgets/common/custom_search_bar.dart';
+import '../../widgets/common/blue_header.dart'; // green_header에서 blue_header로 변경
 import '../../widgets/fridge/fridge_filter_bar.dart';
 import '../../widgets/fridge/fridge_item_card.dart';
 import '../../data/mock_repository.dart';
 import '../../models/fridge_item.dart';
+import '../../widgets/common/add_item_dialog.dart';
+import '../../widgets/common/compact_search_bar.dart';
 
 /// 냉장고 페이지 - 보관된 식품들 관리
 /// 위치별 필터링, 검색, 아이템 상세보기 등 제공
@@ -111,53 +112,65 @@ class _FridgePageState extends State<FridgePage> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
-          child: Column(
-            children: [
-              // 상단 헤더
-              GreenHeader.fridge(
-                itemCount: _filterCounts['All'] ?? 0,
-                onAddPressed: _onAddItemPressed,
-              ),
+    return Scaffold(
+      // Scaffold로 감싸서 FAB 사용 가능하게 함
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Column(
+              children: [
+                // 상단 헤더 (+ 버튼 제거)
+                BlueHeader(
+                  icon: Icons.kitchen,
+                  title: 'My Fridge',
+                  subtitle: '${_filterCounts['All'] ?? 0} items stored',
+                ),
 
-              // 메인 콘텐츠
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 24),
+                // 메인 콘텐츠
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 24),
 
-                      // 검색바
-                      CustomSearchBar.fridge(
-                        controller: _searchController,
-                        onChanged: _onSearchChanged,
-                        focusNode: _focusNode,
-                      ),
+                        // 검색바
+                        CompactSearchBar(
+                          controller: _searchController,
+                          focusNode: _focusNode,
+                          onChanged: _onSearchChanged,
+                        ),
 
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                      // 위치 필터바
-                      FridgeFilterBar(
-                        selectedFilter: _selectedFilter,
-                        filterCounts: _filterCounts,
-                        onFilterChanged: _onFilterChanged,
-                      ),
+                        // 위치 필터바
+                        FridgeFilterBar(
+                          selectedFilter: _selectedFilter,
+                          filterCounts: _filterCounts,
+                          onFilterChanged: _onFilterChanged,
+                        ),
 
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
 
-                      // 아이템 리스트
-                      Expanded(child: _buildItemsList()),
-                    ],
+                        // 아이템 리스트
+                        Expanded(child: _buildItemsList()),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+
+      // 오른쪽 하단 FAB 추가
+      floatingActionButton: FloatingActionButton(
+        onPressed: _onAddItemPressed,
+        backgroundColor: const Color.fromARGB(255, 30, 0, 255), // 파랑색
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -251,18 +264,29 @@ class _FridgePageState extends State<FridgePage> {
   }
 
   /// 아이템 추가 버튼 처리 (다이얼로그 활성화)
-  void _onAddItemPressed() {
-    _showAddItemDialog();
+  void _onAddItemPressed() async {
+    final newItem = await AddItemDialog.show(context);
+    if (newItem != null) {
+      try {
+        await _repository.addFridgeItem(newItem);
+        _loadFridgeItems(); // 목록 다시 불러오기
+        _showSuccessSnackBar('${newItem.name}이(가) 추가되었습니다');
+      } catch (e) {
+        _showErrorSnackBar('아이템 추가에 실패했습니다');
+      }
+    }
   }
 
   /// 아이템 탭 처리
   void _onItemTapped(FridgeItem item) {
+    // ignore: todo
     // TODO: 아이템 상세보기 다이얼로그 또는 페이지 이동
     _showInfoSnackBar('${item.name} 상세보기');
   }
 
   /// 아이템 수정 처리
   void _onItemEdit(FridgeItem item) {
+    // ignore: todo
     // TODO: 아이템 수정 다이얼로그
     _showInfoSnackBar('${item.name} 수정 기능은 준비 중입니다');
   }
@@ -273,341 +297,6 @@ class _FridgePageState extends State<FridgePage> {
   }
 
   // ========== 다이얼로그 및 스낵바 ==========
-
-  /// 아이템 추가 다이얼로그 (새로 추가)
-  void _showAddItemDialog() {
-    final nameController = TextEditingController();
-    final amountController = TextEditingController();
-    String selectedUnit = 'g'; // 기본 단위
-    String selectedCategory = '채소'; // 기본 카테고리
-    String selectedLocation = 'Fridge'; // 기본 보관위치
-    DateTime selectedExpiryDate = DateTime.now().add(
-      const Duration(days: 7),
-    ); // 기본 1주일 후
-
-    // 사용 가능한 옵션들
-    final units = ['g', 'ml', 'kg', 'L', '개', '팩', '병'];
-    final categories = [
-      '채소',
-      '과일',
-      '육류',
-      '생선',
-      '유제품',
-      '곡류',
-      '조미료',
-      '음료',
-      '냉동식품',
-      '기타',
-    ];
-    final locations = ['Fridge', 'Freezer', 'Pantry'];
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.add_circle_outline, color: Colors.green),
-              SizedBox(width: 8),
-              Text('새 아이템 추가'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 아이템명 입력
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: '아이템명 *',
-                    hintText: '예: 양파, 우유, 계란',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.food_bank),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // 수량 + 단위 입력
-                Row(
-                  children: [
-                    // 수량 입력
-                    Expanded(
-                      flex: 2,
-                      child: TextField(
-                        controller: amountController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: '수량 *',
-                          hintText: '예: 500',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.scale),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 8),
-
-                    // 단위 선택
-                    Expanded(
-                      flex: 1,
-                      child: DropdownButtonFormField<String>(
-                        value: selectedUnit,
-                        decoration: const InputDecoration(
-                          labelText: '단위',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: units.map((unit) {
-                          return DropdownMenuItem(
-                            value: unit,
-                            child: Text(unit),
-                          );
-                        }).toList(),
-                        onChanged: (value) => setDialogState(() {
-                          selectedUnit = value ?? 'g';
-                        }),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // 카테고리 선택
-                DropdownButtonFormField<String>(
-                  value: selectedCategory,
-                  decoration: const InputDecoration(
-                    labelText: '카테고리',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.category),
-                  ),
-                  items: categories.map((category) {
-                    return DropdownMenuItem(
-                      value: category,
-                      child: Text(category),
-                    );
-                  }).toList(),
-                  onChanged: (value) => setDialogState(() {
-                    selectedCategory = value ?? '채소';
-                  }),
-                ),
-
-                const SizedBox(height: 16),
-
-                // 보관위치 선택
-                DropdownButtonFormField<String>(
-                  value: selectedLocation,
-                  decoration: const InputDecoration(
-                    labelText: '보관위치',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.location_on),
-                  ),
-                  items: locations.map((location) {
-                    IconData icon;
-                    String label;
-                    switch (location) {
-                      case 'Freezer':
-                        icon = Icons.ac_unit;
-                        label = '냉동실';
-                        break;
-                      case 'Pantry':
-                        icon = Icons.home;
-                        label = '팬트리';
-                        break;
-                      default:
-                        icon = Icons.kitchen;
-                        label = '냉장실';
-                    }
-
-                    return DropdownMenuItem(
-                      value: location,
-                      child: Row(
-                        children: [
-                          Icon(icon, size: 16),
-                          const SizedBox(width: 8),
-                          Text(label),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) => setDialogState(() {
-                    selectedLocation = value ?? 'Fridge';
-                  }),
-                ),
-
-                const SizedBox(height: 16),
-
-                // 유통기한 선택
-                InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: selectedExpiryDate,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                      helpText: '유통기한 선택',
-                      cancelText: '취소',
-                      confirmText: '확인',
-                    );
-                    if (date != null) {
-                      setDialogState(() {
-                        selectedExpiryDate = date;
-                      });
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              '유통기한',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            Text(
-                              '${selectedExpiryDate.year}-${selectedExpiryDate.month.toString().padLeft(2, '0')}-${selectedExpiryDate.day.toString().padLeft(2, '0')}',
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                          ],
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${_calculateDaysLeft(selectedExpiryDate)}일 남음',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _getExpiryColor(
-                              _calculateDaysLeft(selectedExpiryDate),
-                            ),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('취소'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (_validateInput(
-                  nameController.text,
-                  amountController.text,
-                )) {
-                  Navigator.of(context).pop();
-                  _addNewItem(
-                    name: nameController.text.trim(),
-                    amount: amountController.text.trim(),
-                    unit: selectedUnit,
-                    category: selectedCategory,
-                    location: selectedLocation,
-                    expiryDate: selectedExpiryDate,
-                  );
-                } else {
-                  _showErrorSnackBar('아이템명과 수량을 입력해주세요');
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('추가'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// 입력 검증
-  bool _validateInput(String name, String amount) {
-    return name.trim().isNotEmpty && amount.trim().isNotEmpty;
-  }
-
-  /// 남은 일수 계산
-  int _calculateDaysLeft(DateTime expiryDate) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final expiry = DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
-    return expiry.difference(today).inDays;
-  }
-
-  /// 유통기한에 따른 색상 반환
-  Color _getExpiryColor(int daysLeft) {
-    if (daysLeft <= 7) return Colors.red;
-    if (daysLeft <= 28) return Colors.orange;
-    return Colors.green;
-  }
-
-  /// 새 아이템 추가 실행
-  Future<void> _addNewItem({
-    required String name,
-    required String amount,
-    required String unit,
-    required String category,
-    required String location,
-    required DateTime expiryDate,
-  }) async {
-    try {
-      final daysLeft = _calculateDaysLeft(expiryDate);
-      final totalDays = _estimateTotalDays(category);
-
-      final newItem = FridgeItem.fromSampleData(
-        name: name,
-        amount: '$amount$unit',
-        category: category,
-        location: location,
-        daysLeft: daysLeft,
-        totalDays: totalDays,
-      );
-
-      await _repository.addFridgeItem(newItem);
-      _loadFridgeItems(); // 리스트 새로고침
-      _showSuccessSnackBar('$name이(가) 추가되었습니다');
-    } catch (e) {
-      _showErrorSnackBar('아이템 추가에 실패했습니다');
-    }
-  }
-
-  /// 카테고리에 따른 예상 총 유통기한 계산
-  int _estimateTotalDays(String category) {
-    switch (category) {
-      case '채소':
-      case '과일':
-        return 14; // 2주
-      case '육류':
-      case '생선':
-        return 7; // 1주
-      case '유제품':
-        return 10; // 10일
-      case '곡류':
-      case '조미료':
-        return 365; // 1년
-      case '음료':
-        return 30; // 1개월
-      case '냉동식품':
-        return 90; // 3개월
-      default:
-        return 30; // 기본 1개월
-    }
-  }
 
   /// 삭제 확인 다이얼로그
   void _showDeleteConfirmDialog(FridgeItem item) {

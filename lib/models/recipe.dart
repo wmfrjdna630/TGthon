@@ -79,21 +79,21 @@ class Recipe {
   /// 조리시간 포맷팅 (예: "25분", "1시간 30분")
   String get formattedTime {
     if (timeMin < 60) {
-      return '${timeMin}분';
+      return '$timeMin분';
     } else {
       final hours = timeMin ~/ 60;
       final minutes = timeMin % 60;
       if (minutes == 0) {
-        return '${hours}시간';
+        return '$hours시간';
       } else {
-        return '${hours}시간 ${minutes}분';
+        return '$hours시간 $minutes분';
       }
     }
   }
 
   /// 인분 포맷팅
   String get formattedServings {
-    return '${servings}인분';
+    return '$servings인분';
   }
 
   /// 부족한 재료 개수

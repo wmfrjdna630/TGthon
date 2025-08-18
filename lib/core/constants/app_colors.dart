@@ -5,16 +5,16 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._(); // 인스턴스 생성 방지
 
-  // ========== 기본 브랜드 색상 ==========
+  // ========== 기본 브랜드 색상 (하늘색/파랑색 테마) ==========
 
-  /// 메인 브랜드 색상 (초록색)
-  static const Color primary = Color(0xFF34C965);
+  /// 메인 브랜드 색상 (파랑색) - 상단/하단 바용
+  static const Color primary = Color.fromARGB(255, 30, 0, 255);
 
-  /// 메인 색상의 밝은 버전
-  static const Color primaryLight = Color(0xFF5DCE88);
+  /// 메인 색상의 밝은 버전 (밝은 파랑)
+  static const Color primaryLight = Color(0xFF64B5F6);
 
-  /// 메인 색상의 어두운 버전
-  static const Color primaryDark = Color(0xFF2BA856);
+  /// 메인 색상의 어두운 버전 (진한 파랑)
+  static const Color primaryDark = Color.fromARGB(255, 30, 0, 255);
 
   // ========== 상태별 색상 ==========
 
@@ -28,24 +28,24 @@ class AppColors {
   static const Color success = Color(0xFF2ECC71);
 
   /// 정보 상태
-  static const Color info = Color(0xFF3498DB);
+  static const Color info = Color.fromARGB(255, 30, 0, 255);
 
-  // ========== 배경 색상 ==========
+  // ========== 배경 색상 (하늘색 테마) ==========
 
-  /// 앱 기본 배경색
-  static const Color background = Color(0xFFFAFAFA);
+  /// 앱 기본 배경색 (연한 하늘색)
+  static const Color background = Color(0xFFF0F8FF);
 
-  /// 카드 배경색
+  /// 카드 배경색 (순백색으로 대비)
   static const Color cardBackground = Colors.white;
 
-  /// 냉동실 아이템 배경색
-  static const Color freezerBackground = Color(0xFFEFF5FF);
+  /// 냉동실 아이템 배경색 (차가운 파랑 계열)
+  static const Color freezerBackground = Color(0xFFE3F2FD);
 
-  /// 팬트리 아이템 배경색
-  static const Color pantryBackground = Color(0xFFFFFBE5);
+  /// 팬트리 아이템 배경색 (따뜻한 크림색)
+  static const Color pantryBackground = Color(0xFFFFF8E1);
 
-  /// 입력 필드 배경색
-  static const Color inputBackground = Color(0xFFF4F4F4);
+  /// 입력 필드 배경색 (밝은 회색)
+  static const Color inputBackground = Color(0xFFF5F5F5);
 
   // ========== 텍스트 색상 ==========
 
@@ -88,34 +88,34 @@ class AppColors {
   /// 선택되지 않은 네비게이션 아이템 색상
   static const Color navUnselected = Color(0xFF9E9E9E);
 
-  // ========== 필터/칩 색상 ==========
+  // ========== 필터/칩 색상 (파랑 테마) ==========
 
-  /// 선택된 필터 배경색
-  static const Color filterSelected = Color(0xFFEAF7EF);
+  /// 선택된 필터 배경색 (연한 파랑)
+  static const Color filterSelected = Color(0xFFE3F2FD);
 
   /// 선택되지 않은 필터 배경색
   static const Color filterUnselected = Colors.white;
 
-  /// 필터 테두리 색상
-  static const Color filterBorder = Color(0xFFE0E0E0);
+  /// 필터 테두리 색상 (연한 파랑)
+  static const Color filterBorder = Color(0xFFBBDEFB);
 
-  // ========== 메뉴 추천 색상 ==========
+  // ========== 메뉴 추천 색상 (파랑 테마) ==========
 
-  /// 모든 재료 보유 시 배경색
-  static const Color menuAvailable = Color(0xFFE8F5E8);
+  /// 모든 재료 보유 시 배경색 (연한 파랑)
+  static const Color menuAvailable = Color(0xFFE8F4FD);
 
-  /// 재료 부족 시 배경색
+  /// 재료 부족 시 배경색 (연한 주황)
   static const Color menuMissing = Color(0xFFFFF3E0);
 
-  /// 모든 재료 보유 시 테두리색
-  static const Color menuAvailableBorder = Color(0xFF4CAF50);
+  /// 모든 재료 보유 시 테두리색 (파랑)
+  static const Color menuAvailableBorder = Color(0xFF2196F3);
 
-  /// 재료 부족 시 테두리색
+  /// 재료 부족 시 테두리색 (주황)
   static const Color menuMissingBorder = Color(0xFFFF9800);
 
-  // ========== 진행률 바 색상 ==========
+  // ========== 진행률 바 색상 (파랑 테마) ==========
 
-  /// 진행률 바 배경색
+  /// 진행률 바 배경색 (연한 회색)
   static const Color progressBackground = Color(0xFFF0F0F0);
 
   /// 진행률 바 비활성 배경색
@@ -145,19 +145,19 @@ class AppColors {
   // ========== 투명도 변형 ==========
 
   /// 메인 색상 10% 투명도
-  static Color get primaryWithOpacity10 => primary.withOpacity(0.1);
+  static Color get primaryWithOpacity10 => primary.withValues(alpha: 0.1);
 
   /// 메인 색상 20% 투명도
-  static Color get primaryWithOpacity20 => primary.withOpacity(0.2);
+  static Color get primaryWithOpacity20 => primary.withValues(alpha: 0.2);
 
   /// 위험 색상 10% 투명도
-  static Color get dangerWithOpacity10 => danger.withOpacity(0.1);
+  static Color get dangerWithOpacity10 => danger.withValues(alpha: 0.1);
 
   /// 경고 색상 10% 투명도
-  static Color get warningWithOpacity10 => warning.withOpacity(0.1);
+  static Color get warningWithOpacity10 => warning.withValues(alpha: 0.1);
 
   /// 성공 색상 10% 투명도
-  static Color get successWithOpacity10 => success.withOpacity(0.1);
+  static Color get successWithOpacity10 => success.withValues(alpha: 0.1);
 
   // ========== 유틸리티 메서드들 ==========
 

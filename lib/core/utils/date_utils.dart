@@ -11,7 +11,7 @@ class DateUtils {
     if (daysLeft == 0) return '오늘';
     if (daysLeft == 1) return '내일';
     if (daysLeft < 0) return '${(-daysLeft)}일 지남';
-    return '${daysLeft}일 후';
+    return '$daysLeft일 후';
   }
 
   /// 영어로 남은 일수 텍스트 변환
@@ -128,17 +128,17 @@ class DateUtils {
   /// 예: 90분 -> "1시간 30분", 45분 -> "45분"
   static String formatMinutes(int minutes) {
     if (minutes < 60) {
-      return '${minutes}분';
+      return '$minutes분';
     }
 
     final hours = minutes ~/ 60;
     final remainingMinutes = minutes % 60;
 
     if (remainingMinutes == 0) {
-      return '${hours}시간';
+      return '$hours시간';
     }
 
-    return '${hours}시간 ${remainingMinutes}분';
+    return '$hours시간 $remainingMinutes분';
   }
 
   /// 영어로 분을 시간:분 형식으로 변환

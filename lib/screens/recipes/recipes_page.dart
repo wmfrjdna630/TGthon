@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../widgets/common/green_header.dart';
-import '../../widgets/common/custom_search_bar.dart';
+import '../../widgets/common/blue_header.dart'; // green_header에서 blue_header로 변경
 import '../../widgets/recipes/recipe_filter_chips.dart';
 import '../../widgets/recipes/chip_scrollbar.dart';
 import '../../widgets/recipes/recipe_card.dart';
 import '../../data/mock_repository.dart';
 import '../../models/recipe.dart';
+import '../../widgets/common/compact_search_bar.dart';
 
 /// 레시피 페이지 - 레시피 검색 및 필터링
 /// 재료 보유 상태에 따른 레시피 추천 및 검색 기능 제공
@@ -154,8 +154,8 @@ class _RecipesPageState extends State<RecipesPage> {
           constraints: const BoxConstraints(maxWidth: 500),
           child: Column(
             children: [
-              // 상단 헤더
-              GreenHeader.recipes(
+              // 상단 헤더 (BlueHeader로 변경)
+              BlueHeader.recipes(
                 readyCount: _canMakeCount,
                 almostCount: _almostReadyCount,
               ),
@@ -169,7 +169,7 @@ class _RecipesPageState extends State<RecipesPage> {
                       const SizedBox(height: 24),
 
                       // 검색바 (필터 버튼 포함)
-                      CustomSearchBar.recipes(
+                      CompactSearchBar(
                         controller: _searchController,
                         onChanged: _onSearchChanged,
                         onFilterPressed: _onFilterPressed,
@@ -335,12 +335,14 @@ class _RecipesPageState extends State<RecipesPage> {
 
   /// 필터 버튼 처리 (검색바 우측)
   void _onFilterPressed() {
+    // ignore: todo
     // TODO: 고급 필터 다이얼로그 또는 설정 페이지
     _showInfoSnackBar('고급 필터 기능은 준비 중입니다');
   }
 
   /// 레시피 탭 처리
   void _onRecipeTapped(Recipe recipe) {
+    // ignore: todo
     // TODO: 레시피 상세보기 페이지 이동
     _showInfoSnackBar('${recipe.title} 상세보기');
   }
