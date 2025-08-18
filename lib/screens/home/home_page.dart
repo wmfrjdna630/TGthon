@@ -8,6 +8,8 @@ import '../../data/sample_data.dart';
 import '../../data/mock_repository.dart'; // MockRepository 추가
 import '../../models/fridge_item.dart';
 import '../../models/menu_rec.dart';
+import '../../widgets/common/add_item_dialog.dart'; // 공용 추가 다이얼로그
+import '../../widgets/common/compact_search_bar.dart';
 
 /// 홈페이지 - 메인 대시보드
 /// 냉장고 상태, 타임라인, 메뉴 추천 등을 종합적으로 보여주는 페이지
@@ -158,7 +160,7 @@ class _HomePageState extends State<HomePage> {
                     child: Column(
                       children: [
                         // 검색바
-                        CustomSearchBar.home(
+                        CompactSearchBar(
                           controller: _searchController,
                           onChanged: _onSearchChanged,
                         ),
@@ -378,9 +380,19 @@ class _HomePageState extends State<HomePage> {
               ),
               title: const Text('Add Item'),
               subtitle: const Text('냉장고에 새 아이템 추가'),
-              onTap: () {
-                Navigator.pop(context);
-                _showInfoSnackBar('아이템 추가 기능');
+              onTap: () async {
+                Navigator.pop(context); // 바텀시트 닫기
+
+                final newItem = await AddItemDialog.show(context);
+                if (newItem != null) {
+                  try {
+                    await _repository.addFridgeItem(newItem);
+                    _showSuccessSnackBar('${newItem.name}이(가) 추가되었습니다');
+                    // 참고: 목록 새로고침은 필요시 상태 변수로 관리하거나 FridgePage에 위임
+                  } catch (e) {
+                    _showErrorSnackBar('아이템 추가에 실패했습니다');
+                  }
+                }
               },
             ),
 

@@ -6,6 +6,7 @@ import '../../widgets/recipes/chip_scrollbar.dart';
 import '../../widgets/recipes/recipe_card.dart';
 import '../../data/mock_repository.dart';
 import '../../models/recipe.dart';
+import '../../widgets/common/compact_search_bar.dart';
 
 /// 레시피 페이지 - 레시피 검색 및 필터링
 /// 재료 보유 상태에 따른 레시피 추천 및 검색 기능 제공
@@ -169,7 +170,7 @@ class _RecipesPageState extends State<RecipesPage> {
                       const SizedBox(height: 24),
 
                       // 검색바 (필터 버튼 포함)
-                      CustomSearchBar.recipes(
+                      CompactSearchBar(
                         controller: _searchController,
                         onChanged: _onSearchChanged,
                         onFilterPressed: _onFilterPressed,
