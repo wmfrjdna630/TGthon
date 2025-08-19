@@ -393,7 +393,7 @@ class _RecipesPageState extends State<RecipesPage> {
   void _showInfoSnackBar(String message) {
     _showSnackBar(
       message: message,
-      backgroundColor: Colors.blue.shade600,
+      backgroundColor: Color.fromARGB(255, 30, 0, 255),
       duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본 길이
     );
   }

@@ -213,7 +213,7 @@ class _TodoPageState extends State<TodoPage> {
       // 오른쪽 하단 FAB 추가 (동그라미 모양)
       floatingActionButton: FloatingActionButton(
         onPressed: _onAddTodoPressed,
-        backgroundColor: const Color(0xFF2196F3), // 파랑색
+        backgroundColor: const Color.fromARGB(255, 30, 0, 255), // 파랑색
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
@@ -318,7 +318,7 @@ class _TodoPageState extends State<TodoPage> {
               icon: const Icon(Icons.add),
               label: const Text('할일 추가'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2196F3), // 파랑색
+                backgroundColor: const Color.fromARGB(255, 30, 0, 255), // 파랑색
                 foregroundColor: Colors.white,
               ),
             ),
@@ -386,6 +386,7 @@ class _TodoPageState extends State<TodoPage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.white,
           title: const Text('새 할일 추가'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -431,6 +432,10 @@ class _TodoPageState extends State<TodoPage> {
               child: const Text('취소'),
             ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color.fromARGB(255, 30, 0, 255), // 버튼 배경색
+                foregroundColor: Colors.white, // 버튼 텍스트 색
+              ),
               onPressed: () {
                 if (titleController.text.trim().isNotEmpty) {
                   Navigator.of(context).pop();
@@ -580,7 +585,12 @@ class _TodoPageState extends State<TodoPage> {
   void _showSuccessSnackBar(String message) {
     _showSnackBar(
       message: message,
-      backgroundColor: Colors.green, // AppColors.success 대신 직접 색상 사용
+      backgroundColor: Color.fromARGB(
+        255,
+        30,
+        0,
+        255,
+      ), // AppColors.success 대신 직접 색상 사용
       duration: const Duration(milliseconds: 1200), // 성공 메시지는 더 짧게
     );
   }
@@ -596,7 +606,7 @@ class _TodoPageState extends State<TodoPage> {
   void _showInfoSnackBar(String message) {
     _showSnackBar(
       message: message,
-      backgroundColor: Colors.blue.shade600,
+      backgroundColor: Color.fromARGB(255, 30, 0, 255),
       duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본 길이
     );
   }

@@ -39,19 +39,19 @@ class ExpiryIndicatorBar extends StatelessWidget {
             icon: Icons.dangerous,
             count: dangerCount.toString(),
             color: AppColors.danger,
-            label: '위험',
+            //label: '위험',
           ),
           _RiskIndicator(
             icon: Icons.warning,
             count: warningCount.toString(),
             color: AppColors.warning,
-            label: '주의',
+            //label: '주의',
           ),
           _RiskIndicator(
             icon: Icons.check_circle,
             count: safeCount.toString(),
             color: AppColors.success,
-            label: '안전',
+            //label: '안전',
           ),
         ],
       ),
@@ -64,13 +64,13 @@ class _RiskIndicator extends StatelessWidget {
   final IconData icon;
   final String count;
   final Color color;
-  final String label;
+  //final String label;
 
   const _RiskIndicator({
     required this.icon,
     required this.count,
     required this.color,
-    required this.label,
+    //required this.label,
   });
 
   @override
@@ -78,20 +78,10 @@ class _RiskIndicator extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // 아이콘과 개수를 함께 표시
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-                border: Border.all(color: color, width: 1.5),
-              ),
-              child: Icon(icon, color: color, size: 18),
-            ),
+            Icon(icon, color: color, size: 22), // ✅ 동그라미 제거, 아이콘만
             const SizedBox(width: 6),
             Text(
               count,
@@ -104,15 +94,14 @@ class _RiskIndicator extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        // 라벨 텍스트
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: color,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        // Text(
+        //   label,
+        //   style: TextStyle(
+        //     fontSize: 11,
+        //     color: color,
+        //     fontWeight: FontWeight.w500,
+        //   ),
+        // ),
       ],
     );
   }
