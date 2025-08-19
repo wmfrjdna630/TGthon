@@ -201,18 +201,18 @@ class _TimelineVisualization extends StatelessWidget {
 
               // 시작점과 끝점 라벨
               const Positioned(
-                top: -labelGap,
+                top: -labelGap + 4,
                 left: 0,
-                child: Text('오늘', style: TextStyle(fontSize: 12)),
+                child: Text('오늘', style: TextStyle(fontSize: 11)),
               ),
               Positioned(
-                top: -labelGap,
+                top: -labelGap + 4,
                 right: 0,
-                child: Text(filterLabel, style: const TextStyle(fontSize: 12)),
+                child: Text(filterLabel, style: const TextStyle(fontSize: 11)),
               ),
 
               // 구간 구분 라벨 (필터에 따라 다르게 표시)
-              ..._buildTimelineLabels(width, totalDays, filterType),
+              //..._buildTimelineLabels(width, totalDays, filterType),
 
               // 각 아이템을 정확한 위치에 배치
               ...items.asMap().entries.map((e) {
@@ -248,62 +248,6 @@ class _TimelineVisualization extends StatelessWidget {
   }
 
   /// 필터 타입에 따른 시간 구간 라벨 생성
-  List<Widget> _buildTimelineLabels(
-    double width,
-    double totalDays,
-    String filterType,
-  ) {
-    const labelGap = 22.0;
-    final labels = <Widget>[];
-
-    switch (filterType) {
-      case '1주':
-        // 1주 필터: 구간 라벨 없음 (빨간색만)
-        break;
-
-      case '1개월':
-        // 1개월 필터: 1주 지점에 구분선
-        final weekPosition = (7 / totalDays) * width;
-        labels.add(
-          Positioned(
-            top: -labelGap,
-            left: weekPosition - 10, // 텍스트 중앙 정렬
-            child: const Text(
-              '1주',
-              style: TextStyle(fontSize: 10, color: Colors.grey),
-            ),
-          ),
-        );
-        break;
-
-      case '1년':
-        // 1년 필터: 1주, 4주 지점에 구분선
-        final weekPosition = (7 / totalDays) * width;
-        final monthPosition = (28 / totalDays) * width;
-
-        labels.addAll([
-          Positioned(
-            top: -labelGap,
-            left: weekPosition - 10,
-            child: const Text(
-              '1주',
-              style: TextStyle(fontSize: 10, color: Colors.grey),
-            ),
-          ),
-          Positioned(
-            top: -labelGap,
-            left: monthPosition - 15,
-            child: const Text(
-              '4주',
-              style: TextStyle(fontSize: 10, color: Colors.grey),
-            ),
-          ),
-        ]);
-        break;
-    }
-
-    return labels;
-  }
 }
 
 /// 타임라인의 개별 아이템 칩 (새로운 색상 시스템 적용)

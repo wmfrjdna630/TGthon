@@ -230,18 +230,29 @@ class _TodoPageState extends State<TodoPage> {
       return _buildEmptyState();
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _filteredTodos.length,
-      itemBuilder: (context, index) {
-        final todo = _filteredTodos[index];
-        return _TodoCard(
-          todo: todo,
-          onToggleComplete: () => _onToggleComplete(todo),
-          onDelete: () => _onDeleteTodo(todo),
-          onTap: () => _onTodoTapped(todo),
-        );
-      },
+    // 🔸 필터키 + 검색어를 키로 사용해 전환 트리거
+    final listKey = ValueKey('$_selectedFilter|${_searchController.text}');
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: KeyedSubtree(
+        key: listKey,
+        child: ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: _filteredTodos.length,
+          itemBuilder: (context, index) {
+            final todo = _filteredTodos[index];
+            return _TodoCard(
+              todo: todo,
+              onToggleComplete: () => _onToggleComplete(todo),
+              onDelete: () => _onDeleteTodo(todo),
+              onTap: () => _onTodoTapped(todo),
+            );
+          },
+        ),
+      ),
     );
   }
 
