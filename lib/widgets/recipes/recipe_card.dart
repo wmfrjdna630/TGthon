@@ -194,7 +194,9 @@ class _ProgressBar extends StatelessWidget {
       child: LinearProgressIndicator(
         value: progress,
         backgroundColor: AppColors.progressBackground,
-        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+        valueColor: const AlwaysStoppedAnimation<Color>(
+          Color.fromARGB(255, 0, 60, 255),
+        ),
         minHeight: 8,
       ),
     );

@@ -1,14 +1,19 @@
+// lib/screens/recipes/recipes_page.dart
 import 'package:flutter/material.dart';
-import '../../widgets/common/blue_header.dart'; // green_header에서 blue_header로 변경
-import '../../widgets/recipes/recipe_filter_chips.dart';
-import '../../widgets/recipes/chip_scrollbar.dart';
+import '../../widgets/common/blue_header.dart';
 import '../../widgets/recipes/recipe_card.dart';
 import '../../data/mock_repository.dart';
+import '../../data/sample_data.dart';
 import '../../models/recipe.dart';
+import '../../models/menu_rec.dart';
 import '../../widgets/common/compact_search_bar.dart';
 
-/// 레시피 페이지 - 레시피 검색 및 필터링
-/// 재료 보유 상태에 따른 레시피 추천 및 검색 기능 제공
+/// 정렬 모드 (홈과 동일한 의미)
+enum RecipeSortMode { expiry, frequency, favorite }
+
+/// 레시피 페이지 - 단일 더미(한글) 사용
+/// 상단 카테고리: 전체 / 한식 / 중식 / 양식 / 일식 / 간식
+/// 정렬 탭: 유통기한순 / 빈도순 / 즐겨찾는순
 class RecipesPage extends StatefulWidget {
   const RecipesPage({super.key});
 
@@ -17,135 +22,138 @@ class RecipesPage extends StatefulWidget {
 }
 
 class _RecipesPageState extends State<RecipesPage> {
-  // ========== 상태 변수들 ==========
+  // ===== 상태 =====
+  String _selectedCategory = '전체';
+  RecipeSortMode _sortMode = RecipeSortMode.expiry;
 
-  /// 현재 선택된 필터
-  String _selectedFilter = 'Can make now';
-
-  /// 검색 텍스트 컨트롤러
   final TextEditingController _searchController = TextEditingController();
-
-  /// 검색 입력 포커스 노드
   final FocusNode _focusNode = FocusNode();
-
-  /// 칩 스크롤 컨트롤러
-  final ScrollController _chipController = ScrollController();
-
-  /// 목 데이터 저장소
   final MockRepository _repository = MockRepository();
 
-  /// 모든 레시피들
   List<Recipe> _allRecipes = [];
-
-  /// 로딩 상태
+  List<MenuRec> _allMenus = []; // 정렬에 필요한 홈 속성 참조
   bool _isLoading = true;
 
-  // ========== 계산된 속성들 ==========
-
-  /// 필터별 레시피 개수
-  Map<String, int> get _filterCounts {
-    return {
-      'Can make now': _allRecipes.where((r) => r.canMakeNow).length,
-      'Almost ready': _allRecipes.where((r) => r.isAlmostReady).length,
-      'Quick meals': _allRecipes.where((r) => r.isQuickMeal).length,
-      'Vegetarian': _allRecipes.where((r) => r.isVegetarian).length,
+  // ===== 파생 =====
+  Map<String, int> get _categoryCounts {
+    final base = <String, int>{
+      '전체': _allRecipes.length,
+      '한식': 0,
+      '중식': 0,
+      '양식': 0,
+      '일식': 0,
+      '간식': 0,
     };
+    for (final r in _allRecipes) {
+      for (final c in ['한식', '중식', '양식', '일식', '간식']) {
+        if (r.tags.contains(c)) base[c] = (base[c] ?? 0) + 1;
+      }
+    }
+    return base;
   }
 
-  /// "만들 수 있는" 레시피 개수
-  int get _canMakeCount => _filterCounts['Can make now'] ?? 0;
+  int get _canMakeCount => _allRecipes.where((r) => r.canMakeNow).length;
+  int get _almostReadyCount => _allRecipes.where((r) => r.isAlmostReady).length;
 
-  /// "거의 완성" 레시피 개수
-  int get _almostReadyCount => _filterCounts['Almost ready'] ?? 0;
-
-  /// 필터링된 레시피들
-  List<Recipe> get _filteredRecipes {
-    List<Recipe> recipes = _allRecipes;
-
-    // 필터 적용
-    switch (_selectedFilter) {
-      case 'Can make now':
-        recipes = recipes.where((r) => r.canMakeNow).toList();
-        break;
-      case 'Almost ready':
-        recipes = recipes.where((r) => r.isAlmostReady).toList();
-        break;
-      case 'Quick meals':
-        recipes = recipes.where((r) => r.isQuickMeal).toList();
-        break;
-      case 'Vegetarian':
-        recipes = recipes.where((r) => r.isVegetarian).toList();
-        break;
-    }
-
-    // 검색 필터 적용
-    final query = _searchController.text.toLowerCase();
-    if (query.isNotEmpty) {
-      recipes = recipes.where((recipe) {
-        return recipe.title.toLowerCase().contains(query) ||
-            recipe.tags.any((tag) => tag.toLowerCase().contains(query));
-      }).toList();
-    }
-
-    return recipes;
-  }
-
-  // ========== 라이프사이클 메서드들 ==========
-
+  // ===== 라이프사이클 =====
   @override
   void initState() {
     super.initState();
-    _loadRecipes();
-    _setupListeners();
+    _loadUnified();
   }
 
   @override
   void dispose() {
-    // 페이지 종료 시 모든 SnackBar 제거
     _clearAllSnackBars();
     _searchController.dispose();
     _focusNode.dispose();
-    _chipController.dispose();
     super.dispose();
   }
 
-  // ========== 초기 설정 ==========
-
-  /// 리스너들 설정
-  void _setupListeners() {
-    _searchController.addListener(_onSearchChanged);
-    _chipController.addListener(() => setState(() {}));
-
-    // 첫 프레임 후 상태 계산
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  // ========== 데이터 로딩 ==========
-
-  /// 레시피들 로딩
-  Future<void> _loadRecipes() async {
+  Future<void> _loadUnified() async {
     try {
-      final recipes = await _repository.getRecipes();
-      if (mounted) {
-        setState(() {
-          _allRecipes = recipes;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        _showErrorSnackBar('레시피를 불러오는데 실패했습니다.');
-      }
+      final recipes = await _repository
+          .getRecipes(); // SampleData.recipes (단일 소스 파생)
+      final menus = await _repository
+          .getMenuRecommendations(); // SampleData.menuRecommendations (단일 소스 파생)
+      if (!mounted) return;
+      setState(() {
+        _allRecipes = recipes;
+        _allMenus = menus;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showErrorSnackBar('레시피를 불러오는데 실패했습니다.');
     }
   }
 
-  // ========== 빌드 메서드 ==========
+  // ===== 정렬/필터 후 리스트 =====
+  List<Recipe> get _displayList {
+    if (_isLoading) return const [];
 
+    // 1) 정렬 기준: MenuRec 속성에 의존 (minDaysLeft, favorite 등)
+    final byTitle = {for (final r in _allRecipes) r.title: r};
+    List<MenuRec> menus = List<MenuRec>.from(_allMenus);
+
+    switch (_sortMode) {
+      case RecipeSortMode.expiry:
+        menus.sort((a, b) => a.minDaysLeft.compareTo(b.minDaysLeft));
+        break;
+      case RecipeSortMode.frequency:
+        // 홈과 동일 로직: 부족한 필수재료 < 3 인 메뉴만, 부족 개수 오름차순.
+        final owned = SampleData.fridgeItems
+            .map((e) => e.name.trim().toLowerCase())
+            .toSet();
+        int missing(MenuRec m) => _missingRequiredCount(m, owned);
+        menus = menus.where((m) => missing(m) < 3).toList()
+          ..sort((a, b) {
+            final am = missing(a), bm = missing(b);
+            if (am != bm) return am.compareTo(bm);
+            final ex = a.minDaysLeft.compareTo(b.minDaysLeft);
+            if (ex != 0) return ex;
+            if (a.favorite != b.favorite) {
+              return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
+            }
+            return a.title.compareTo(b.title);
+          });
+        break;
+      case RecipeSortMode.favorite:
+        menus.sort((a, b) {
+          if (a.favorite == b.favorite) return a.title.compareTo(b.title);
+          return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
+        });
+        break;
+    }
+
+    // 2) MenuRec 정렬 순서를 Recipe로 매핑
+    List<Recipe> ordered = [];
+    for (final m in menus) {
+      final r = byTitle[m.title];
+      if (r != null) ordered.add(r);
+    }
+
+    // 3) 카테고리 필터
+    if (_selectedCategory != '전체') {
+      ordered = ordered
+          .where((r) => r.tags.contains(_selectedCategory))
+          .toList();
+    }
+
+    // 4) 검색
+    final q = _searchController.text.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      ordered = ordered.where((r) {
+        return r.title.toLowerCase().contains(q) ||
+            r.tags.any((t) => t.toLowerCase().contains(q));
+      }).toList();
+    }
+
+    return ordered;
+  }
+
+  // ======= UI =======
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -154,50 +162,34 @@ class _RecipesPageState extends State<RecipesPage> {
           constraints: const BoxConstraints(maxWidth: 500),
           child: Column(
             children: [
-              // 상단 헤더 (BlueHeader로 변경)
               BlueHeader.recipes(
                 readyCount: _canMakeCount,
                 almostCount: _almostReadyCount,
               ),
-
-              // 메인 콘텐츠
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
                     children: [
                       const SizedBox(height: 24),
-
-                      // 검색바 (필터 버튼 포함)
                       CompactSearchBar(
                         controller: _searchController,
-                        onChanged: _onSearchChanged,
-                        onFilterPressed: _onFilterPressed,
+                        onChanged: (_) => setState(() {}),
                         focusNode: _focusNode,
                       ),
-
                       const SizedBox(height: 16),
-
-                      // 필터 칩들
-                      RecipeFilterChips(
-                        selectedFilter: _selectedFilter,
-                        filterCounts: _filterCounts,
-                        onFilterChanged: _onFilterChanged,
-                        scrollController: _chipController,
+                      _CategoryChips(
+                        selected: _selectedCategory,
+                        counts: _categoryCounts,
+                        onChanged: (c) => setState(() => _selectedCategory = c),
                       ),
-
                       const SizedBox(height: 8),
-
-                      // 칩 스크롤바
-                      ChipScrollbar(
-                        scrollController: _chipController,
-                        trackWidth: MediaQuery.of(context).size.width - 48,
+                      _SortChips(
+                        current: _sortMode,
+                        onChanged: (m) => setState(() => _sortMode = m),
                       ),
-
                       const SizedBox(height: 12),
-
-                      // 레시피 리스트
-                      Expanded(child: _buildRecipesList()),
+                      Expanded(child: _buildList()),
                     ],
                   ),
                 ),
@@ -209,97 +201,29 @@ class _RecipesPageState extends State<RecipesPage> {
     );
   }
 
-  /// 레시피 리스트 빌드
-  Widget _buildRecipesList() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_filteredRecipes.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (child, anim) {
-        final slide = Tween<Offset>(
-          begin: const Offset(0, .06),
-          end: Offset.zero,
-        ).animate(anim);
-
-        return FadeTransition(
-          opacity: anim,
-          child: SlideTransition(position: slide, child: child),
-        );
-      },
-      child: ScrollConfiguration(
-        key: ValueKey(_selectedFilter),
-        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-        child: ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: _filteredRecipes.length,
-          itemBuilder: (context, index) {
-            final recipe = _filteredRecipes[index];
-            return RecipeCard(
-              recipe: recipe,
-              onTap: () => _onRecipeTapped(recipe),
-            );
-          },
-        ),
+  Widget _buildList() {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    final list = _displayList;
+    if (list.isEmpty) return _buildEmpty();
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: list.length,
+      itemBuilder: (_, i) => RecipeCard(
+        recipe: list[i],
+        onTap: () => _showInfoSnackBar('${list[i].title} 상세보기'),
       ),
     );
   }
 
-  /// 빈 상태 위젯
-  Widget _buildEmptyState() {
-    String message;
-    String subtitle;
-    IconData icon;
-
-    if (_searchController.text.isNotEmpty) {
-      message = '검색 결과가 없습니다';
-      subtitle = '다른 키워드로 검색해보세요';
-      icon = Icons.search_off;
-    } else {
-      switch (_selectedFilter) {
-        case 'Can make now':
-          message = '지금 만들 수 있는 레시피가 없습니다';
-          subtitle = '재료를 더 준비하거나 다른 필터를 선택해보세요';
-          icon = Icons.no_meals;
-          break;
-        case 'Almost ready':
-          message = '거의 완성 가능한 레시피가 없습니다';
-          subtitle = '재료를 조금 더 준비하면 만들 수 있어요';
-          icon = Icons.restaurant;
-          break;
-        case 'Quick meals':
-          message = '빠른 요리 레시피가 없습니다';
-          subtitle = '30분 이하로 만들 수 있는 요리를 찾아보세요';
-          icon = Icons.timer;
-          break;
-        case 'Vegetarian':
-          message = '채식 레시피가 없습니다';
-          subtitle = '채식 요리 레시피를 추가해보세요';
-          icon = Icons.eco;
-          break;
-        default:
-          message = '레시피가 없습니다';
-          subtitle = '새로운 레시피를 추가해보세요';
-          icon = Icons.book;
-      }
-    }
-
+  Widget _buildEmpty() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 64, color: Colors.grey[400]),
+          Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
-            message,
-            textAlign: TextAlign.center,
+            '조건에 맞는 레시피가 없습니다',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -308,8 +232,7 @@ class _RecipesPageState extends State<RecipesPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            subtitle,
-            textAlign: TextAlign.center,
+            '필터를 바꾸거나 다른 키워드로 검색해보세요',
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
         ],
@@ -317,84 +240,164 @@ class _RecipesPageState extends State<RecipesPage> {
     );
   }
 
-  // ========== 이벤트 핸들러들 ==========
-
-  /// 검색 텍스트 변경 처리
-  void _onSearchChanged([String? value]) {
-    setState(() {
-      // 검색 결과 업데이트
-    });
-  }
-
-  /// 필터 변경 처리
-  void _onFilterChanged(String newFilter) {
-    setState(() {
-      _selectedFilter = newFilter;
-    });
-  }
-
-  /// 필터 버튼 처리 (검색바 우측)
-  void _onFilterPressed() {
-    // ignore: todo
-    // TODO: 고급 필터 다이얼로그 또는 설정 페이지
-    _showInfoSnackBar('고급 필터 기능은 준비 중입니다');
-  }
-
-  /// 레시피 탭 처리
-  void _onRecipeTapped(Recipe recipe) {
-    // ignore: todo
-    // TODO: 레시피 상세보기 페이지 이동
-    _showInfoSnackBar('${recipe.title} 상세보기');
-  }
-
-  // ========== 개선된 스낵바 헬퍼들 ==========
-
-  /// 모든 SnackBar를 즉시 제거하는 메서드
+  // ===== 스낵바 =====
   void _clearAllSnackBars() {
-    if (mounted) {
-      ScaffoldMessenger.of(context).clearSnackBars();
-    }
+    if (mounted) ScaffoldMessenger.of(context).clearSnackBars();
   }
 
-  /// 기존 SnackBar 제거 후 새 SnackBar 표시하는 공통 메서드
-  void _showSnackBar({
-    required String message,
-    required Color backgroundColor,
-    Duration duration = const Duration(milliseconds: 1500), // 기본 1.5초로 단축
-  }) {
-    if (!mounted) return;
-
-    // 기존 SnackBar를 즉시 제거
+  void _showSnackBar(String msg, Color c, {int ms = 1500}) {
     _clearAllSnackBars();
-
-    // 새 SnackBar 표시
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: backgroundColor,
-        duration: duration,
-        behavior: SnackBarBehavior.floating, // 플로팅 스타일로 더 빠른 반응성
+        content: Text(msg),
+        backgroundColor: c,
+        duration: Duration(milliseconds: ms),
+        behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
 
-  /// 오류 스낵바 (개선됨)
-  void _showErrorSnackBar(String message) {
-    _showSnackBar(
-      message: message,
-      backgroundColor: Colors.red,
-      duration: const Duration(milliseconds: 2000), // 오류 메시지는 조금 더 길게
+  void _showErrorSnackBar(String m) => _showSnackBar(m, Colors.red, ms: 2000);
+  void _showInfoSnackBar(String m) =>
+      _showSnackBar(m, const Color.fromARGB(255, 30, 0, 255));
+
+  // ===== 홈의 빈도순 로직과 동일한 "부족 개수" 계산기 =====
+  int _missingRequiredCount(MenuRec menu, Set<String> owned) {
+    if (menu.hasAllRequired) return 0;
+    final msg = (menu.needMessage).trim();
+    if (msg.isEmpty) return 999;
+    final parts = msg
+        .toLowerCase()
+        .replaceAll('!', ' ')
+        .replaceAll('요.', ' ')
+        .split(RegExp(r'[,\u00B7\u2022/·∙•]| 그리고 | 및 | 와 | 과 | 혹은 | 또는 '));
+    final tokens = parts
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .where((s) => s.runes.length >= 1 && s.runes.length <= 12)
+        .toSet()
+        .toList();
+    return tokens.length;
+  }
+}
+
+// ===== 카테고리 칩 =====
+class _CategoryChips extends StatelessWidget {
+  final String selected;
+  final Map<String, int> counts;
+  final ValueChanged<String> onChanged;
+
+  const _CategoryChips({
+    required this.selected,
+    required this.counts,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = ['전체', '한식', '중식', '양식', '일식', '간식'];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: items.map((label) {
+          final isSel = selected == label;
+          final count = counts[label] ?? 0;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => onChanged(label),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: isSel
+                      ? const Color.fromARGB(255, 30, 0, 255)
+                      : const Color.fromARGB(255, 255, 255, 255),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isSel ? Colors.white : Colors.black87,
+                        fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSel ? Colors.white : Colors.black12,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isSel
+                              ? const Color.fromARGB(255, 30, 0, 255)
+                              : Colors.black54,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
+}
 
-  /// 정보 스낵바 (개선됨)
-  void _showInfoSnackBar(String message) {
-    _showSnackBar(
-      message: message,
-      backgroundColor: Color.fromARGB(255, 30, 0, 255),
-      duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본 길이
+// ===== 정렬 칩 (홈과 동일 디자인) =====
+class _SortChips extends StatelessWidget {
+  final RecipeSortMode current;
+  final ValueChanged<RecipeSortMode> onChanged;
+
+  const _SortChips({required this.current, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget chip(String label, RecipeSortMode m) => GestureDetector(
+      onTap: () => onChanged(m),
+      child: Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: current == m
+              ? const Color.fromARGB(255, 30, 0, 255)
+              : const Color.fromARGB(255, 255, 255, 255),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: current == m ? Colors.white : Colors.black87,
+            fontWeight: current == m ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+
+    return Row(
+      children: [
+        chip('유통기한순', RecipeSortMode.expiry),
+        chip('빈도순', RecipeSortMode.frequency),
+        chip('즐겨찾는순', RecipeSortMode.favorite),
+      ],
     );
   }
 }
