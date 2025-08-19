@@ -85,7 +85,7 @@ class SampleData {
       amount: '300g',
       category: '유제품',
       location: 'Fridge',
-      daysLeft: 25,
+      daysLeft: 80,
       totalDays: 45,
     ),
     FridgeItem.fromSampleData(

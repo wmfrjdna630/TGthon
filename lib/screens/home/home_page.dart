@@ -25,7 +25,7 @@ class HomePage extends StatefulWidget {
 enum SortMode { expiry, frequency, favorite }
 
 /// 시간 필터 열거형 (새로운 기준)
-enum TimeFilter { week, month, all }
+enum TimeFilter { week, month, third }
 
 class _HomePageState extends State<HomePage> {
   // ========== 상태 변수들 ==========
@@ -57,8 +57,8 @@ class _HomePageState extends State<HomePage> {
         return 7; // 1주
       case TimeFilter.month:
         return 28; // 1개월 (4주)
-      case TimeFilter.all:
-        return 365; // 1년 (전체)
+      case TimeFilter.third:
+        return 90; // 1년 (전체)
     }
   }
 

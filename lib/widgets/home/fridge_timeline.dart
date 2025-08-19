@@ -28,8 +28,8 @@ class FridgeTimeline extends StatelessWidget {
         return 7; // 1주
       case TimeFilter.month:
         return 28; // 1개월 (4주)
-      case TimeFilter.all:
-        return 365; // 1년
+      case TimeFilter.third:
+        return 90; // 3개월
     }
   }
 
@@ -40,8 +40,8 @@ class FridgeTimeline extends StatelessWidget {
         return '1주';
       case TimeFilter.month:
         return '1개월';
-      case TimeFilter.all:
-        return '1년';
+      case TimeFilter.third:
+        return '3개월';
     }
   }
 
@@ -118,8 +118,8 @@ class _TimeFilterChips extends StatelessWidget {
           case TimeFilter.month:
             label = '1개월';
             break;
-          case TimeFilter.all:
-            label = '1년';
+          case TimeFilter.third:
+            label = '3개월';
             break;
         }
 
@@ -276,12 +276,12 @@ class _TimelineChip extends StatelessWidget {
         ],
       ),
       child: Text(
-        name,
+        name.length > 4 ? name.substring(0, 4) : name,
         textAlign: TextAlign.center,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 12,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
