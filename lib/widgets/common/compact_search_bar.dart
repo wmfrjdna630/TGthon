@@ -47,7 +47,7 @@ class CompactSearchBar extends StatelessWidget {
                   textAlignVertical: TextAlignVertical.center, // ⬅ 세로 중앙
                   decoration: const InputDecoration(
                     isDense: true,
-                    hintText: 'Search Ingredients...',
+                    hintText: '메뉴나 재료를 검색하세요...',
                     contentPadding: EdgeInsets.zero, // ⬅ 패딩 0
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,

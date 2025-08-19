@@ -3,6 +3,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../models/fridge_item.dart';
 import '../../screens/home/home_page.dart'; // TimeFilter enum 사용
+import 'dart:math' as math;
 
 /// 홈페이지의 냉장고 타임라인 위젯
 /// 유통기한이 임박한 식품들을 시간순으로 시각화하여 표시
@@ -149,7 +150,14 @@ class _TimeFilterChips extends StatelessWidget {
   }
 }
 
-/// 타임라인 시각화 위젯 (새로운 색상 시스템)
+/// 내부 사용용: 아이템과 계산된 left 좌표 묶음 (레코드 대신 명시 타입)
+class _ItemLeft {
+  final FridgeItem item;
+  final double left;
+  _ItemLeft(this.item, this.left);
+}
+
+/// 타임라인 시각화 위젯 (겹침 방지 배치)
 class _TimelineVisualization extends StatelessWidget {
   final List<FridgeItem> items;
   final int maxDays;
@@ -167,22 +175,68 @@ class _TimelineVisualization extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        const barHeight = 6.0;
-        final totalDays = maxDays.toDouble();
-        const rowGap = 36.0;
-        const labelGap = 22.0;
+        final double width = constraints.maxWidth;
+        const double barHeight = 6.0;
+        const double labelGap = 22.0;
 
-        // 필터에 따른 그라데이션과 stop 포인트
+        // 필터에 따른 그라데이션
         final gradientColors = AppColors.getTimelineGradient(filterType);
         final gradientStops = AppColors.getTimelineGradientStops(filterType);
 
+        // 칩 치수/여백 추정치
+        const double chipWidth = 64.0; // 4글자 + padding 고려
+        const double chipHeight = 28.0;
+        const double minGapX = 8.0; // 칩 가로 간격 최소치
+        const double rowGap = 36.0; // 레일 간 세로 간격
+        const int maxRails = 24; // 안전 상한 (필요시 늘려도 됨)
+
+        // X 위치 계산을 위한 스케일
+        final double totalDays = maxDays.toDouble();
+
+        // 1) 각 아이템의 target-left 계산 후 x 기준 정렬
+        final List<_ItemLeft> itemsWithLeft = items.map((item) {
+          final double d = item.daysLeft.clamp(0, totalDays).toDouble();
+          final double x = (d / totalDays) * width;
+          final double left = (x - chipWidth / 2)
+              .clamp(0.0, math.max(0.0, width - chipWidth))
+              .toDouble();
+          return _ItemLeft(item, left);
+        }).toList()..sort((a, b) => a.left.compareTo(b.left));
+
+        // 2) 스윕라인: 겹침 없이 위로 쌓기
+        final List<double> railRightEdge = []; // 레일별 마지막 칩의 right
+        final List<int> railOfIndex = List.filled(itemsWithLeft.length, 0);
+
+        for (int i = 0; i < itemsWithLeft.length; i++) {
+          final double left = itemsWithLeft[i].left;
+          final double right = left + chipWidth;
+
+          int placedRail = -1;
+          for (int r = 0; r < railRightEdge.length; r++) {
+            if (left >= railRightEdge[r] + minGapX) {
+              placedRail = r;
+              railRightEdge[r] = right;
+              break;
+            }
+          }
+          if (placedRail == -1) {
+            // 새 레일 생성
+            railRightEdge.add(right);
+            placedRail = railRightEdge.length - 1;
+          }
+          railOfIndex[i] = placedRail;
+          if (railRightEdge.length >= maxRails) break; // 상한 보호
+        }
+
+        final int railsUsed = math.max(3, railRightEdge.length); // 최소 3줄 유지
+        final double totalHeight = 24 + railsUsed * rowGap;
+
         return SizedBox(
-          height: rowGap * 3 + 28,
+          height: totalHeight,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // 동적 그라데이션 바 (필터에 따라 색상 변화)
+              // 상단 그라데이션 바
               Positioned(
                 left: 0,
                 right: 0,
@@ -199,7 +253,7 @@ class _TimelineVisualization extends StatelessWidget {
                 ),
               ),
 
-              // 시작점과 끝점 라벨
+              // 시작/끝 라벨
               const Positioned(
                 top: -labelGap + 4,
                 left: 0,
@@ -211,25 +265,13 @@ class _TimelineVisualization extends StatelessWidget {
                 child: Text(filterLabel, style: const TextStyle(fontSize: 11)),
               ),
 
-              // 구간 구분 라벨 (필터에 따라 다르게 표시)
-              //..._buildTimelineLabels(width, totalDays, filterType),
-
-              // 각 아이템을 정확한 위치에 배치
-              ...items.asMap().entries.map((e) {
-                final idx = e.key;
-                final item = e.value;
-
-                // 정확한 X축 위치 계산 (daysLeft를 기준으로)
-                final d = item.daysLeft.clamp(0, totalDays).toDouble();
-                final x = (d / totalDays) * width;
-
-                // 칩의 너비를 고려하여 중앙 정렬 (칩 너비 약 48px로 가정)
-                const chipWidth = 48.0;
-                final left = (x - chipWidth / 2).clamp(0.0, width - chipWidth);
-
-                // Y축 위치 (3개 레일로 분산)
-                final rail = idx % 3;
-                final top = 24 + rail * rowGap;
+              // 3) 배치된 좌표로 칩 렌더링
+              ...List.generate(itemsWithLeft.length, (i) {
+                final _ItemLeft entry = itemsWithLeft[i];
+                final FridgeItem item = entry.item;
+                final double left = entry.left;
+                final int rail = railOfIndex[i];
+                final double top = 24 + rail * rowGap;
 
                 return Positioned(
                   left: left,
@@ -246,8 +288,6 @@ class _TimelineVisualization extends StatelessWidget {
       },
     );
   }
-
-  /// 필터 타입에 따른 시간 구간 라벨 생성
 }
 
 /// 타임라인의 개별 아이템 칩 (새로운 색상 시스템 적용)
@@ -260,7 +300,7 @@ class _TimelineChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 새로운 색상 기준 적용
-    final bg = AppColors.getColorByDaysLeft(daysLeft);
+    final Color bg = AppColors.getColorByDaysLeft(daysLeft);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
