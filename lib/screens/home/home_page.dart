@@ -67,25 +67,62 @@ class _HomePageState extends State<HomePage> {
     return SampleData.getFridgeItemsByTimeFilter(_maxDaysForFilter);
   }
 
-  /// 정렬된 메뉴 추천들 (actualFrequency 반영)
+  /// 보유 재료 이름 집합 (소문자 트림)
+  Set<String> get _ownedIngredientSet {
+    return _allFridgeItems.map((e) => e.name.trim().toLowerCase()).toSet();
+  }
+
+  /// ====== 핵심 변경: 정렬된 메뉴 추천들 (빈도순 정의 수정) ======
+  /// - expiry: 기존 그대로 (유통기한 임박 순)
+  /// - frequency: "클릭 많이 한 순"이 아님!
+  ///   -> "필수 재료 부족 개수 < 3"인 메뉴만 필터링,
+  ///      부족 개수 오름차순(=일치율 높은 순)으로 정렬
+  ///      (동점 시: minDaysLeft 오름차순 → 즐겨찾기 우선 → 제목)
+  /// - favorite: 즐겨찾기 우선
   List<MenuRec> get _sortedMenus {
     final list = [..._menuRecommendations];
+
     switch (_sortMode) {
       case SortMode.expiry:
         list.sort((a, b) => a.minDaysLeft.compareTo(b.minDaysLeft));
-        break;
+        return list;
+
       case SortMode.frequency:
-        // actualFrequency를 사용하여 클릭 횟수가 반영된 빈도로 정렬
-        list.sort((a, b) => b.actualFrequency.compareTo(a.actualFrequency));
-        break;
+        final owned = _ownedIngredientSet;
+
+        // 1) 필터: 필수 재료 부족 개수가 3 미만인 메뉴만 남긴다
+        final filtered = list
+            .where((m) => _missingRequiredCount(m, owned) < 3)
+            .toList();
+
+        // 2) 정렬: 부족 개수 오름차순(=일치율 높은 순)
+        filtered.sort((a, b) {
+          final am = _missingRequiredCount(a, owned);
+          final bm = _missingRequiredCount(b, owned);
+          if (am != bm) return am.compareTo(bm);
+
+          // 동점 정렬 기준 보완
+          final expiryCmp = a.minDaysLeft.compareTo(b.minDaysLeft);
+          if (expiryCmp != 0) return expiryCmp;
+
+          if (a.favorite != b.favorite) {
+            // 즐겨찾기 true가 먼저 오도록
+            return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
+          }
+
+          // 마지막 타이브레이커
+          return a.title.compareTo(b.title);
+        });
+
+        return filtered;
+
       case SortMode.favorite:
         list.sort((a, b) {
           if (a.favorite == b.favorite) return a.title.compareTo(b.title);
           return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
         });
-        break;
+        return list;
     }
-    return list;
   }
 
   // ========== 라이프사이클 메서드들 ==========
@@ -165,8 +202,6 @@ class _HomePageState extends State<HomePage> {
                         ),
 
                         const SizedBox(height: 24),
-
-                        // Quick Actions 삭제됨
 
                         // 냉장고 타임라인
                         FridgeTimeline(
@@ -250,9 +285,7 @@ class _HomePageState extends State<HomePage> {
       });
 
       // 3. 사용자에게 피드백 제공
-      _showSuccessSnackBar(
-        '${menu.title} 레시피 보기 (클릭: ${menu.clickCount + 1}회)',
-      );
+      _showSuccessSnackBar('${menu.title} 레시피 메뉴로 연결');
 
       // ignore: todo
       // TODO: 실제 레시피 상세보기 페이지로 이동
@@ -326,7 +359,7 @@ class _HomePageState extends State<HomePage> {
   void _showSuccessSnackBar(String message) {
     _showSnackBar(
       message: message,
-      backgroundColor: Color.fromARGB(255, 30, 0, 255),
+      backgroundColor: const Color.fromARGB(255, 30, 0, 255),
       duration: const Duration(milliseconds: 1200), // 성공 메시지는 더 짧게
     );
   }
@@ -344,7 +377,7 @@ class _HomePageState extends State<HomePage> {
   void _showInfoSnackBar(String message) {
     _showSnackBar(
       message: message,
-      backgroundColor: Color.fromARGB(255, 30, 0, 255),
+      backgroundColor: const Color.fromARGB(255, 30, 0, 255),
       duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본값
     );
   }
@@ -417,5 +450,47 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  // ====== 헬퍼: 필수 재료 부족 개수 계산 ======
+  // - 우선순위 1: MenuRec.hasAllRequired => 0
+  // - 우선순위 2: needMessage 안의 "부족/필수" 리스트를 추정해서 개수 산출
+  //   (샘플 데이터가 문자열 기반이므로 파서로 안전하게 계산)
+  // - 필요한 경우, 보유 재료 집합(owned)과의 교집합/차집합 로직으로 확장 가능
+  int _missingRequiredCount(MenuRec menu, Set<String> owned) {
+    if (menu.hasAllRequired) return 0;
+
+    final msg = (menu.needMessage).trim();
+    if (msg.isEmpty) {
+      // 정보가 없으면 필터에서 탈락하도록 큰 값
+      return 999;
+    }
+
+    // needMessage에서 아이템 후보를 뽑아 "부족한 재료" 개수로 간주
+    final candidates = _splitCandidates(msg);
+
+    // 문자열 기반이므로, 일단 후보 개수를 "부족 개수"로 취급
+    // (향후 MenuRec에 requiredIngredients가 생기면 여기서 owned와 비교로 교체)
+    return candidates.length;
+  }
+
+  /// needMessage 문자열을 재료 토큰 후보 리스트로 파싱
+  List<String> _splitCandidates(String msg) {
+    // 흔한 구분자(, · ·• / 그리고 및 와 과 혹은 또는)를 기준으로 분해
+    final parts = msg
+        .toLowerCase()
+        .replaceAll('!', ' ')
+        .replaceAll('요.', ' ')
+        .split(RegExp(r'[,\u00B7\u2022/·∙•]| 그리고 | 및 | 와 | 과 | 혹은 | 또는 '));
+
+    // 너무 짧은 일반어 필터링 및 공백 제거
+    final tokens = parts
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .where((s) => s.runes.length >= 1 && s.runes.length <= 12)
+        .toList();
+
+    // 중복 제거
+    return tokens.toSet().toList();
   }
 }
