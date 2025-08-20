@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../models/fridge_item.dart';
-import '../../screens/home/home_page.dart'; // TimeFilter enum 사용
+import '../../screens/home/home_types.dart';
 import 'dart:math' as math;
 
 /// 홈페이지의 냉장고 타임라인 위젯

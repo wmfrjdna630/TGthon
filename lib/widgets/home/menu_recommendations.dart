@@ -241,26 +241,16 @@ class _MenuCardState extends State<_MenuCard> {
                     ),
 
                     // ====== 메시지 영역 수정 시작 ======
-                    // 필수 재료 메시지: 항상 주황색, 한 번만 표시
-                    if (widget.menu.needMessage.isNotEmpty) ...[
+                    if (widget.menu.minDaysLeft < 7) ...[
                       const SizedBox(height: 8),
                       _MessageRow(
                         icon: Icons.warning_amber_rounded,
-                        message: widget.menu.needMessage,
+                        message: '유통기한 임박 재료를 포함하고 있어요',
                         color: Colors.orange,
                       ),
                     ],
-
-                    // 선택 재료 메시지: 초록색, 정상 노출
-                    if (widget.menu.goodMessage.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      _MessageRow(
-                        icon: Icons.check_circle_rounded,
-                        message: widget.menu.goodMessage,
-                        color: Colors.green,
-                      ),
-                    ],
                     // ====== 메시지 영역 수정 끝 ======
+                    // goodMessage(부가 재료)는 더 이상 표기하지 않음
                   ],
                 ),
               ),

@@ -1,171 +1,186 @@
+// lib/screens/home/home_page.dart
 import 'package:flutter/material.dart';
+
+// ==== UI 위젯들 ====
 import '../../widgets/home/expiry_indicator_bar.dart';
-import '../../widgets/home/dynamic_header.dart'; // 새로운 동적 헤더 추가
+import '../../widgets/home/dynamic_header.dart';
 import '../../widgets/home/fridge_timeline.dart';
 import '../../widgets/home/menu_recommendations.dart';
+import '../../widgets/common/compact_search_bar.dart';
+import '../../widgets/common/add_item_dialog.dart';
+
+// ==== 데이터/모델 ====
 import '../../data/sample_data.dart';
-import '../../data/mock_repository.dart'; // MockRepository 추가
+import '../../data/remote/recipe_api.dart';
+import '../../data/recipe_repository.dart';
+import '../../data/mock_repository.dart'; // Add Item 등 로컬 목 동작에 사용
 import '../../models/fridge_item.dart';
 import '../../models/menu_rec.dart';
-import '../../widgets/common/add_item_dialog.dart'; // 공용 추가 다이얼로그
-import '../../widgets/common/compact_search_bar.dart';
 
-/// 홈페이지 - 메인 대시보드
-/// 냉장고 상태, 타임라인, 메뉴 추천 등을 종합적으로 보여주는 페이지
+// ==== 공용 타입(enum) ====
+import 'home_types.dart';
+export 'home_types.dart'; // 기존 import 경로를 유지하는 위젯들을 위한 재노출
+
+/// 홈 메인 대시보드
 class HomePage extends StatefulWidget {
   final String userName;
-
   const HomePage({super.key, this.userName = '공육공육공'});
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-/// 정렬 모드 열거형
-enum SortMode { expiry, frequency, favorite }
-
-/// 시간 필터 열거형 (새로운 기준)
-enum TimeFilter { week, month, third }
-
 class _HomePageState extends State<HomePage> {
-  // ========== 상태 변수들 ==========
+  // ===== 상태 =====
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
 
-  /// 메뉴 정렬 모드
+  late final RecipeRepository _recipeRepo; // API 기반 메뉴 소스
+  final MockRepository _mockRepo = MockRepository(); // Add Item 등 목 동작
+
   SortMode _sortMode = SortMode.expiry;
-
-  /// 타임라인 시간 필터 (새로운 기본값)
   TimeFilter _timeFilter = TimeFilter.month;
 
-  /// 검색 텍스트 컨트롤러
-  final TextEditingController _searchController = TextEditingController();
+  List<MenuRec> _menus = [];
+  bool _loadingMenus = true;
 
-  /// 목 데이터 저장소 (즐겨찾기 토글을 위해 추가)
-  final MockRepository _repository = MockRepository();
-
-  /// 메뉴 추천 리스트 (Repository를 통해 관리, 초기값은 샘플 데이터)
-  List<MenuRec> _menuRecommendations = SampleData.menuRecommendations;
-
-  // ========== 데이터 접근자들 ==========
-
-  /// 샘플 데이터에서 타임라인 아이템 가져오기
+  // 냉장고/타임라인은 샘플 데이터 사용(기존 동작 유지)
   List<FridgeItem> get _allFridgeItems => SampleData.timelineItems;
 
-  /// 시간 필터에 따른 최대 일수 (전체를 1년으로 수정)
   int get _maxDaysForFilter {
     switch (_timeFilter) {
       case TimeFilter.week:
         return 7; // 1주
       case TimeFilter.month:
-        return 28; // 1개월 (4주)
+        return 28; // 1개월(4주)
       case TimeFilter.third:
-        return 90; // 1년 (전체)
+        return 90; // 3개월
     }
   }
 
-  /// 필터링된 냉장고 아이템들 (통합 데이터에서 필터링)
-  List<FridgeItem> get _filteredFridgeItems {
-    return SampleData.getFridgeItemsByTimeFilter(_maxDaysForFilter);
+  List<FridgeItem> get _filteredFridgeItems =>
+      SampleData.getFridgeItemsByTimeFilter(_maxDaysForFilter);
+
+  // ===== 라이프사이클 =====
+  @override
+  void initState() {
+    super.initState();
+
+    // -- API 키 설정: dart-define 우선, 없으면 테스트용 하드코딩 --
+    const defineKey = String.fromEnvironment('FOOD_API_KEY');
+    const hardKey = 'b98006370cc24b529436'; // ⚠️ 실서비스에선 dart-define 사용 권장
+
+    _recipeRepo = RecipeRepository(
+      api: RecipeApi(
+        base: 'http://openapi.foodsafetykorea.go.kr',
+        keyId: (defineKey.isNotEmpty ? defineKey : hardKey),
+        serviceId: 'COOKRCP01',
+      ),
+    );
+
+    _loadMenus(); // 최초 로드
   }
 
-  /// 보유 재료 이름 집합 (소문자 트림)
-  Set<String> get _ownedIngredientSet {
-    return _allFridgeItems.map((e) => e.name.trim().toLowerCase()).toSet();
+  @override
+  void dispose() {
+    _clearAllSnackBars();
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
   }
 
-  /// ====== 핵심 변경: 정렬된 메뉴 추천들 (빈도순 정의 수정) ======
-  /// - expiry: 기존 그대로 (유통기한 임박 순)
-  /// - frequency: "클릭 많이 한 순"이 아님!
-  ///   -> "필수 재료 부족 개수 < 3"인 메뉴만 필터링,
-  ///      부족 개수 오름차순(=일치율 높은 순)으로 정렬
-  ///      (동점 시: minDaysLeft 오름차순 → 즐겨찾기 우선 → 제목)
-  /// - favorite: 즐겨찾기 우선
-  List<MenuRec> get _sortedMenus {
-    final list = [..._menuRecommendations];
+  // ===== 데이터 로드 =====
+  Future<void> _loadMenus() async {
+    try {
+      setState(() => _loadingMenus = true);
 
-    switch (_sortMode) {
+      final keyword = _searchController.text.trim();
+      final menus = await _recipeRepo.searchMenus(
+        keyword: keyword.isEmpty ? null : keyword, // RCP_NM
+        dishType: null, // 홈은 전체
+        include: null, // 필요시 대표 재료(예: '계란')로 1차 필터 가능
+        page: 1,
+        pageSize: 20,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _menus = _applySort(menus, _sortMode);
+        _loadingMenus = false;
+      });
+    } catch (_) {
+      // 실패 시 샘플 폴백
+      if (!mounted) return;
+      setState(() {
+        _menus = _applySort(SampleData.menuRecommendations, _sortMode);
+        _loadingMenus = false;
+      });
+      _showSnack('레시피 API 호출 실패. 샘플 데이터로 표시합니다.', Colors.orange);
+    }
+  }
+
+  // ===== 정렬 =====
+  List<MenuRec> _applySort(List<MenuRec> src, SortMode mode) {
+    final owned = _allFridgeItems
+        .map((e) => e.name.trim().toLowerCase())
+        .toSet();
+
+    var list = List<MenuRec>.from(src);
+    switch (mode) {
       case SortMode.expiry:
         list.sort((a, b) => a.minDaysLeft.compareTo(b.minDaysLeft));
-        return list;
+        break;
 
       case SortMode.frequency:
-        final owned = _ownedIngredientSet;
-
-        // 1) 필터: 필수 재료 부족 개수가 3 미만인 메뉴만 남긴다
-        final filtered = list
-            .where((m) => _missingRequiredCount(m, owned) < 3)
-            .toList();
-
-        // 2) 정렬: 부족 개수 오름차순(=일치율 높은 순)
-        filtered.sort((a, b) {
-          final am = _missingRequiredCount(a, owned);
-          final bm = _missingRequiredCount(b, owned);
-          if (am != bm) return am.compareTo(bm);
-
-          // 동점 정렬 기준 보완
-          final expiryCmp = a.minDaysLeft.compareTo(b.minDaysLeft);
-          if (expiryCmp != 0) return expiryCmp;
-
-          if (a.favorite != b.favorite) {
-            // 즐겨찾기 true가 먼저 오도록
-            return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
-          }
-
-          // 마지막 타이브레이커
-          return a.title.compareTo(b.title);
-        });
-
-        return filtered;
+        int missing(MenuRec m) => _missingRequiredCount(m, owned);
+        list = list.where((m) => missing(m) < 3).toList()
+          ..sort((a, b) {
+            final am = missing(a), bm = missing(b);
+            if (am != bm) return am.compareTo(bm);
+            final ex = a.minDaysLeft.compareTo(b.minDaysLeft);
+            if (ex != 0) return ex;
+            if (a.favorite != b.favorite) {
+              return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
+            }
+            return a.title.compareTo(b.title);
+          });
+        break;
 
       case SortMode.favorite:
         list.sort((a, b) {
           if (a.favorite == b.favorite) return a.title.compareTo(b.title);
           return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
         });
-        return list;
+        break;
     }
+    return list;
   }
 
-  // ========== 라이프사이클 메서드들 ==========
-
-  @override
-  void initState() {
-    super.initState();
-    _loadMenuRecommendations();
+  // 홈/레시피 공통 “부족 개수” 계산기
+  int _missingRequiredCount(MenuRec menu, Set<String> owned) {
+    if (menu.hasAllRequired) return 0;
+    final msg = (menu.needMessage).trim();
+    if (msg.isEmpty) return 999;
+    final parts = msg
+        .toLowerCase()
+        .replaceAll('!', ' ')
+        .replaceAll('요.', ' ')
+        .split(RegExp(r'[,\u00B7\u2022/·∙•]| 그리고 | 및 | 와 | 과 | 혹은 | 또는 '));
+    final tokens = parts
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .where((s) => s.runes.length >= 1 && s.runes.length <= 12)
+        .toSet()
+        .toList();
+    return tokens.length;
   }
 
-  @override
-  void dispose() {
-    // 페이지 종료 시 모든 SnackBar 제거
-    _clearAllSnackBars();
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  // ========== 데이터 로딩 ==========
-
-  /// 메뉴 추천 데이터 로딩
-  Future<void> _loadMenuRecommendations() async {
-    try {
-      final menus = await _repository.getMenuRecommendations();
-      if (mounted) {
-        setState(() {
-          _menuRecommendations = menus;
-        });
-      }
-    } catch (e) {
-      // 에러 발생 시 샘플 데이터 사용
-      setState(() {
-        _menuRecommendations = SampleData.menuRecommendations;
-      });
-    }
-  }
-
-  // ========== 빌드 메서드 ==========
-
+  // ===== UI =====
   @override
   Widget build(BuildContext context) {
+    final name = widget.userName;
+
     return Scaffold(
-      // Scaffold로 감싸서 FAB 사용 가능하게 함
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 24),
@@ -176,51 +191,86 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   const SizedBox(height: 16),
 
-                  // 동적 헤더 (새로 추가)
+                  // 상단 동적 헤더
                   DynamicHeader(
                     fridgeItems: _allFridgeItems,
-                    menuRecommendations: _sortedMenus,
-                    todoCount: 3, // ignore: todo // TODO: 실제 TODO 개수로 교체
+                    menuRecommendations: _menus,
+                    todoCount: 3, // TODO: 실제 TODO 개수로 교체
                   ),
 
                   const SizedBox(height: 16),
 
-                  // 상단 유통기한 상태 표시바
+                  // 유통기한 인디케이터
                   ExpiryIndicatorBar(fridgeItems: _allFridgeItems),
 
                   const SizedBox(height: 16),
 
-                  // 메인 콘텐츠 영역
+                  // 메인 콘텐츠
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Column(
                       children: [
-                        // 검색바
+                        // 검색
                         CompactSearchBar(
                           controller: _searchController,
-                          onChanged: _onSearchChanged,
+                          focusNode: _searchFocus,
+                          onChanged: (_) => _loadMenus(), // 즉시 재조회
                         ),
 
                         const SizedBox(height: 24),
 
                         // 냉장고 타임라인
                         FridgeTimeline(
-                          userName: widget.userName,
+                          userName: name,
                           fridgeItems: _filteredFridgeItems,
                           currentFilter: _timeFilter,
-                          onFilterChanged: _onTimeFilterChanged,
+                          onFilterChanged: (f) =>
+                              setState(() => _timeFilter = f),
                         ),
 
                         const SizedBox(height: 24),
 
-                        // 메뉴 추천 (클릭 이벤트 핸들러 추가)
-                        MenuRecommendations(
-                          menuRecommendations: _sortedMenus,
-                          currentSortMode: _sortMode,
-                          onSortModeChanged: _onSortModeChanged,
-                          onMenuTapped: _onMenuTapped, // 메뉴 클릭 핸들러
-                          onFavoriteToggled: _onFavoriteToggled, // 즐겨찾기 토글 핸들러
-                        ),
+                        // 메뉴 추천
+                        _loadingMenus
+                            ? const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 24),
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              )
+                            : MenuRecommendations(
+                                menuRecommendations: _applySort(
+                                  _menus,
+                                  _sortMode,
+                                ),
+                                currentSortMode: _sortMode,
+                                onSortModeChanged: (m) =>
+                                    setState(() => _sortMode = m),
+                                onMenuTapped: (menu) {
+                                  // 클릭수/최근성 로컬 반영
+                                  setState(() {
+                                    final idx = _menus.indexOf(menu);
+                                    if (idx >= 0) {
+                                      _menus[idx] = _menus[idx]
+                                          .incrementClick();
+                                    }
+                                  });
+                                  _showSnack(
+                                    '${menu.title} 상세로 이동',
+                                    const Color.fromARGB(255, 30, 0, 255),
+                                  );
+                                },
+                                onFavoriteToggled: (menu) {
+                                  setState(() {
+                                    final idx = _menus.indexOf(menu);
+                                    if (idx >= 0) {
+                                      _menus[idx] = _menus[idx].copyWith(
+                                        favorite: !menu.favorite,
+                                      );
+                                    }
+                                  });
+                                },
+                              ),
                       ],
                     ),
                   ),
@@ -231,165 +281,19 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
 
-      // 오른쪽 하단 FAB 추가 (Quick Actions 대체)
+      // Quick Action FAB
       floatingActionButton: FloatingActionButton(
         onPressed: _onQuickActionPressed,
-        backgroundColor: const Color.fromARGB(255, 30, 0, 255), // 파랑색
+        backgroundColor: const Color.fromARGB(255, 30, 0, 255),
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  // ========== 이벤트 핸들러들 ==========
+  // ===== Quick Actions =====
+  void _onQuickActionPressed() => _showQuickActionDialog();
 
-  /// 검색 텍스트 변경 처리
-  void _onSearchChanged(String query) {
-    // ignore: todo
-    // TODO: 검색 기능 구현
-    // 메뉴나 재료 검색 로직 추가
-    setState(() {
-      // 검색 결과에 따른 상태 업데이트
-    });
-  }
-
-  /// 시간 필터 변경 처리
-  void _onTimeFilterChanged(TimeFilter newFilter) {
-    setState(() {
-      _timeFilter = newFilter;
-    });
-  }
-
-  /// 메뉴 정렬 모드 변경 처리
-  void _onSortModeChanged(SortMode newMode) {
-    setState(() {
-      _sortMode = newMode;
-    });
-  }
-
-  /// 메뉴 클릭 처리 (빈도 카운트 기능 추가)
-  Future<void> _onMenuTapped(MenuRec menu) async {
-    try {
-      // 1. 먼저 클릭 카운트 증가 (백엔드에 저장)
-      await _repository.incrementMenuClick(menu.title);
-
-      // 2. 로컬 상태도 즉시 업데이트 (UI 반응성을 위해)
-      setState(() {
-        final index = _menuRecommendations.indexWhere(
-          (m) => m.title == menu.title,
-        );
-        if (index != -1) {
-          _menuRecommendations[index] = _menuRecommendations[index]
-              .incrementClick();
-        }
-      });
-
-      // 3. 사용자에게 피드백 제공
-      _showSuccessSnackBar('${menu.title} 레시피 메뉴로 연결');
-
-      // ignore: todo
-      // TODO: 실제 레시피 상세보기 페이지로 이동
-      // Navigator.push(context, MaterialPageRoute(builder: (context) => RecipeDetailPage(menu: menu)));
-    } catch (e) {
-      _showErrorSnackBar('메뉴 정보를 불러오는데 실패했습니다');
-    }
-  }
-
-  /// 즐겨찾기 토글 처리 (새로 추가)
-  Future<void> _onFavoriteToggled(MenuRec menu) async {
-    try {
-      await _repository.toggleMenuFavorite(menu.title);
-
-      // 로컬 상태도 즉시 업데이트
-      setState(() {
-        final index = _menuRecommendations.indexWhere(
-          (m) => m.title == menu.title,
-        );
-        if (index != -1) {
-          _menuRecommendations[index] = _menuRecommendations[index].copyWith(
-            favorite: !_menuRecommendations[index].favorite,
-          );
-        }
-      });
-
-      // 사용자에게 피드백 제공
-      final message = menu.favorite
-          ? '${menu.title}을(를) 즐겨찾기에서 제거했습니다'
-          : '${menu.title}을(를) 즐겨찾기에 추가했습니다';
-      _showSuccessSnackBar(message);
-    } catch (e) {
-      _showErrorSnackBar('즐겨찾기 변경에 실패했습니다');
-    }
-  }
-
-  // ========== 개선된 스낵바 헬퍼들 ==========
-
-  /// 모든 SnackBar를 즉시 제거하는 메서드
-  void _clearAllSnackBars() {
-    if (mounted) {
-      ScaffoldMessenger.of(context).clearSnackBars();
-    }
-  }
-
-  /// 기존 SnackBar 제거 후 새 SnackBar 표시하는 공통 메서드
-  void _showSnackBar({
-    required String message,
-    required Color backgroundColor,
-    Duration duration = const Duration(milliseconds: 1500), // 기본 1.5초로 단축
-  }) {
-    if (!mounted) return;
-
-    // 기존 SnackBar를 즉시 제거
-    _clearAllSnackBars();
-
-    // 새 SnackBar 표시
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: backgroundColor,
-        duration: duration,
-        behavior: SnackBarBehavior.floating, // 플로팅 스타일로 더 빠른 반응성
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-
-  /// 성공 스낵바
-  void _showSuccessSnackBar(String message) {
-    _showSnackBar(
-      message: message,
-      backgroundColor: const Color.fromARGB(255, 30, 0, 255),
-      duration: const Duration(milliseconds: 1200), // 성공 메시지는 더 짧게
-    );
-  }
-
-  /// 오류 스낵바
-  void _showErrorSnackBar(String message) {
-    _showSnackBar(
-      message: message,
-      backgroundColor: Colors.red,
-      duration: const Duration(milliseconds: 2000), // 오류 메시지는 조금 더 길게
-    );
-  }
-
-  /// 정보 스낵바
-  void _showInfoSnackBar(String message) {
-    _showSnackBar(
-      message: message,
-      backgroundColor: const Color.fromARGB(255, 30, 0, 255),
-      duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본값
-    );
-  }
-
-  /// Quick Action FAB 처리 (새로 추가)
-  void _onQuickActionPressed() {
-    // ignore: todo
-    // TODO: Quick Action 선택 다이얼로그 또는 메뉴 표시
-    _showQuickActionDialog();
-  }
-
-  /// Quick Action 선택 다이얼로그 (새로 추가)
   void _showQuickActionDialog() {
     showModalBottomSheet(
       context: context,
@@ -407,7 +311,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 20),
 
-            // Add Item 버튼
+            // Add Item
             ListTile(
               leading: const CircleAvatar(
                 backgroundColor: Color.fromARGB(255, 30, 0, 255),
@@ -416,22 +320,23 @@ class _HomePageState extends State<HomePage> {
               title: const Text('Add Item'),
               subtitle: const Text('냉장고에 새 아이템 추가'),
               onTap: () async {
-                Navigator.pop(context); // 바텀시트 닫기
-
+                Navigator.pop(context);
                 final newItem = await AddItemDialog.show(context);
                 if (newItem != null) {
                   try {
-                    await _repository.addFridgeItem(newItem);
-                    _showSuccessSnackBar('${newItem.name}이(가) 추가되었습니다');
-                    // 참고: 목록 새로고침은 필요시 상태 변수로 관리하거나 FridgePage에 위임
-                  } catch (e) {
-                    _showErrorSnackBar('아이템 추가에 실패했습니다');
+                    await _mockRepo.addFridgeItem(newItem);
+                    _showSnack(
+                      '${newItem.name}이(가) 추가되었습니다',
+                      const Color.fromARGB(255, 30, 0, 255),
+                    );
+                  } catch (_) {
+                    _showSnack('아이템 추가에 실패했습니다', Colors.red);
                   }
                 }
               },
             ),
 
-            // Scan Receipt 버튼
+            // Scan Receipt
             ListTile(
               leading: const CircleAvatar(
                 backgroundColor: Color.fromARGB(255, 30, 0, 255),
@@ -441,7 +346,7 @@ class _HomePageState extends State<HomePage> {
               subtitle: const Text('영수증 스캔으로 한 번에 추가'),
               onTap: () {
                 Navigator.pop(context);
-                _showInfoSnackBar('영수증 스캔 기능');
+                _showSnack('영수증 스캔 기능', const Color.fromARGB(255, 30, 0, 255));
               },
             ),
 
@@ -452,45 +357,23 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ====== 헬퍼: 필수 재료 부족 개수 계산 ======
-  // - 우선순위 1: MenuRec.hasAllRequired => 0
-  // - 우선순위 2: needMessage 안의 "부족/필수" 리스트를 추정해서 개수 산출
-  //   (샘플 데이터가 문자열 기반이므로 파서로 안전하게 계산)
-  // - 필요한 경우, 보유 재료 집합(owned)과의 교집합/차집합 로직으로 확장 가능
-  int _missingRequiredCount(MenuRec menu, Set<String> owned) {
-    if (menu.hasAllRequired) return 0;
-
-    final msg = (menu.needMessage).trim();
-    if (msg.isEmpty) {
-      // 정보가 없으면 필터에서 탈락하도록 큰 값
-      return 999;
-    }
-
-    // needMessage에서 아이템 후보를 뽑아 "부족한 재료" 개수로 간주
-    final candidates = _splitCandidates(msg);
-
-    // 문자열 기반이므로, 일단 후보 개수를 "부족 개수"로 취급
-    // (향후 MenuRec에 requiredIngredients가 생기면 여기서 owned와 비교로 교체)
-    return candidates.length;
+  // ===== 스낵바 =====
+  void _clearAllSnackBars() {
+    if (mounted) ScaffoldMessenger.of(context).clearSnackBars();
   }
 
-  /// needMessage 문자열을 재료 토큰 후보 리스트로 파싱
-  List<String> _splitCandidates(String msg) {
-    // 흔한 구분자(, · ·• / 그리고 및 와 과 혹은 또는)를 기준으로 분해
-    final parts = msg
-        .toLowerCase()
-        .replaceAll('!', ' ')
-        .replaceAll('요.', ' ')
-        .split(RegExp(r'[,\u00B7\u2022/·∙•]| 그리고 | 및 | 와 | 과 | 혹은 | 또는 '));
-
-    // 너무 짧은 일반어 필터링 및 공백 제거
-    final tokens = parts
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .where((s) => s.runes.length >= 1 && s.runes.length <= 12)
-        .toList();
-
-    // 중복 제거
-    return tokens.toSet().toList();
+  void _showSnack(String msg, Color c, {int ms = 1500}) {
+    _clearAllSnackBars();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: c,
+        duration: Duration(milliseconds: ms),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 }
