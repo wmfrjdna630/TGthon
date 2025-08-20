@@ -175,14 +175,6 @@ class _TodoPageState extends State<TodoPage> {
                       children: [
                         const SizedBox(height: 24),
 
-                        // 검색바
-                        CompactSearchBar(
-                          controller: _searchController,
-                          onChanged: _onSearchChanged,
-                        ),
-
-                        const SizedBox(height: 24),
-
                         // 필터 칩들
                         FilterChips.withCounts(
                           labelCounts: {
