@@ -1,3 +1,4 @@
+// lib/widgets/fridge/fridge_item_card.dart
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
@@ -23,6 +24,7 @@ class FridgeItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onEdit, // 길게 누르면 빠른 수정
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(16),
@@ -40,8 +42,8 @@ class FridgeItemCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 상단 행: 아이템명 + 카테고리/아이콘
-            _ItemHeader(item: item),
+            // 상단 행: 아이템명 + 카테고리/아이콘 + 더보기(수정/삭제)
+            _ItemHeader(item: item, onEdit: onEdit, onDelete: onDelete),
 
             const SizedBox(height: 4),
 
@@ -64,18 +66,22 @@ class FridgeItemCard extends StatelessWidget {
   }
 }
 
-/// 아이템 헤더 (이름 + 카테고리/아이콘)
+/// 아이템 헤더 (이름 + 카테고리/아이콘 + 액션)
 class _ItemHeader extends StatelessWidget {
   final FridgeItem item;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
-  const _ItemHeader({required this.item});
+  const _ItemHeader({required this.item, this.onEdit, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
+    final hasActions = onEdit != null || onDelete != null;
+
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // 아이템명
+        // 아이템명 (왼쪽 확장)
         Expanded(child: Text(item.name, style: AppTextStyles.cardTitle)),
 
         // 카테고리 + 아이콘
@@ -92,6 +98,50 @@ class _ItemHeader extends StatelessWidget {
             Icon(item.icon, size: 16, color: Colors.black45),
           ],
         ),
+
+        // 간격
+        if (hasActions) const SizedBox(width: 6),
+
+        // 더보기(수정/삭제) 팝업 메뉴
+        if (hasActions)
+          PopupMenuButton<String>(
+            tooltip: '작업',
+            onSelected: (value) {
+              if (value == 'edit') {
+                onEdit?.call();
+              } else if (value == 'delete') {
+                onDelete?.call();
+              }
+            },
+            itemBuilder: (context) => [
+              if (onEdit != null)
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit, size: 18),
+                      SizedBox(width: 8),
+                      Text('수정'),
+                    ],
+                  ),
+                ),
+              if (onDelete != null)
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline, size: 18),
+                      SizedBox(width: 8),
+                      Text('삭제'),
+                    ],
+                  ),
+                ),
+            ],
+            child: const Padding(
+              padding: EdgeInsets.only(left: 4),
+              child: Icon(Icons.more_vert, color: Colors.black45),
+            ),
+          ),
       ],
     );
   }

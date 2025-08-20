@@ -2,7 +2,8 @@
 import 'package:flutter/material.dart';
 import '../../widgets/common/blue_header.dart';
 import '../../widgets/recipes/recipe_card.dart';
-import '../../data/mock_repository.dart';
+import '../../data/recipe_repository.dart';
+import '../../data/remote/recipe_api.dart';
 import '../../data/sample_data.dart';
 import '../../models/recipe.dart';
 import '../../models/menu_rec.dart';
@@ -28,7 +29,7 @@ class _RecipesPageState extends State<RecipesPage> {
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final MockRepository _repository = MockRepository();
+  late final RecipeRepository _repository;
 
   List<Recipe> _allRecipes = [];
   List<MenuRec> _allMenus = []; // 정렬에 필요한 홈 속성 참조
@@ -59,6 +60,13 @@ class _RecipesPageState extends State<RecipesPage> {
   @override
   void initState() {
     super.initState();
+    _repository = RecipeRepository(
+      api: const RecipeApi(
+        base: 'http://openapi.foodsafetykorea.go.kr', // 환경변수로 빼도 됨
+        keyId: 'b98006370cc24b529436', // ★ 발급키 넣기
+        serviceId: 'COOKRCP01',
+      ),
+    );
     _loadUnified();
   }
 
@@ -72,20 +80,38 @@ class _RecipesPageState extends State<RecipesPage> {
 
   Future<void> _loadUnified() async {
     try {
-      final recipes = await _repository
-          .getRecipes(); // SampleData.recipes (단일 소스 파생)
-      final menus = await _repository
-          .getMenuRecommendations(); // SampleData.menuRecommendations (단일 소스 파생)
+      setState(() => _isLoading = true);
+
+      final dish = _mapCategoryToRcpPat2(_selectedCategory); // 칩 → API값
+      final keyword = _searchController.text.trim().isEmpty
+          ? null
+          : _searchController.text.trim();
+
+      final recipes = await _repository.searchRecipes(
+        keyword: keyword, // RCP_NM
+        dishType: dish, // RCP_PAT2
+        include: null, // 필요 시 보유재료의 대표 1~2개를 넣어 1차 검색
+        page: 1,
+        pageSize: 20,
+      );
+      final menus = await _repository.searchMenus(
+        keyword: keyword,
+        dishType: dish,
+        include: null,
+        page: 1,
+        pageSize: 20,
+      );
+
       if (!mounted) return;
       setState(() {
         _allRecipes = recipes;
         _allMenus = menus;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      _showErrorSnackBar('레시피를 불러오는데 실패했습니다.');
+      _showErrorSnackBar('레시피를 불러오는데 실패했습니다: $e');
     }
   }
 
@@ -174,14 +200,20 @@ class _RecipesPageState extends State<RecipesPage> {
                       const SizedBox(height: 24),
                       CompactSearchBar(
                         controller: _searchController,
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (_) {
+                          setState(() {});
+                          _loadUnified();
+                        },
                         focusNode: _focusNode,
                       ),
                       const SizedBox(height: 16),
                       _CategoryChips(
                         selected: _selectedCategory,
                         counts: _categoryCounts,
-                        onChanged: (c) => setState(() => _selectedCategory = c),
+                        onChanged: (c) {
+                          setState(() => _selectedCategory = c);
+                          _loadUnified();
+                        },
                       ),
                       const SizedBox(height: 8),
                       _SortChips(
@@ -281,6 +313,24 @@ class _RecipesPageState extends State<RecipesPage> {
         .toList();
     return tokens.length;
   }
+
+  String? _mapCategoryToRcpPat2(String ui) {
+    // API 예: 반찬/국/후식/밥/면 …
+    switch (ui) {
+      case '전체':
+        return null;
+      case '밥':
+        return '밥';
+      case '국&찌개':
+        return '국';
+      case '반찬':
+        return '반찬';
+      case '후식':
+        return '후식';
+      default:
+        return null;
+    }
+  }
 }
 
 // ===== 카테고리 칩 =====
@@ -297,7 +347,7 @@ class _CategoryChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = ['전체', '한식', '중식', '양식', '일식', '간식'];
+    final items = ['전체', '밥', '국&찌개', '반찬', '후식'];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(

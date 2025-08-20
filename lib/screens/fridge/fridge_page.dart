@@ -1,14 +1,15 @@
+// lib/screens/fridge/fridge_page.dart
+
 import 'package:flutter/material.dart';
-import '../../widgets/common/blue_header.dart'; // green_header에서 blue_header로 변경
+import '../../widgets/common/blue_header.dart';
 import '../../widgets/fridge/fridge_filter_bar.dart';
 import '../../widgets/fridge/fridge_item_card.dart';
 import '../../data/mock_repository.dart';
 import '../../models/fridge_item.dart';
 import '../../widgets/common/add_item_dialog.dart';
 import '../../widgets/common/compact_search_bar.dart';
+import '../../widgets/common/edit_item_dialog.dart'; // [추가]
 
-/// 냉장고 페이지 - 보관된 식품들 관리
-/// 위치별 필터링, 검색, 아이템 상세보기 등 제공
 class FridgePage extends StatefulWidget {
   const FridgePage({super.key});
 
@@ -17,29 +18,14 @@ class FridgePage extends StatefulWidget {
 }
 
 class _FridgePageState extends State<FridgePage> {
-  // ========== 상태 변수들 ==========
-
-  /// 현재 선택된 위치 필터
   String _selectedFilter = 'All';
-
-  /// 검색 텍스트 컨트롤러
   final TextEditingController _searchController = TextEditingController();
-
-  /// 검색 입력 포커스 노드
   final FocusNode _focusNode = FocusNode();
-
-  /// 목 데이터 저장소
   final MockRepository _repository = MockRepository();
 
-  /// 냉장고 아이템들
   List<FridgeItem> _allItems = [];
-
-  /// 로딩 상태
   bool _isLoading = true;
 
-  // ========== 계산된 속성들 ==========
-
-  /// 위치별 아이템 개수 맵
   Map<String, int> get _filterCounts => {
     'All': _allItems.length,
     'Fridge': _allItems.where((item) => item.location == 'Fridge').length,
@@ -47,16 +33,11 @@ class _FridgePageState extends State<FridgePage> {
     'Pantry': _allItems.where((item) => item.location == 'Pantry').length,
   };
 
-  /// 필터링된 아이템들
   List<FridgeItem> get _filteredItems {
     List<FridgeItem> items = _allItems;
-
-    // 위치 필터 적용
     if (_selectedFilter != 'All') {
       items = items.where((item) => item.location == _selectedFilter).toList();
     }
-
-    // 검색 필터 적용
     final query = _searchController.text.toLowerCase();
     if (query.isNotEmpty) {
       items = items.where((item) {
@@ -64,11 +45,8 @@ class _FridgePageState extends State<FridgePage> {
             item.category.toLowerCase().contains(query);
       }).toList();
     }
-
     return items;
   }
-
-  // ========== 라이프사이클 메서드들 ==========
 
   @override
   void initState() {
@@ -79,16 +57,12 @@ class _FridgePageState extends State<FridgePage> {
 
   @override
   void dispose() {
-    // 페이지 종료 시 모든 SnackBar 제거
     _clearAllSnackBars();
     _searchController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
-  // ========== 데이터 로딩 ==========
-
-  /// 냉장고 아이템들 로딩
   Future<void> _loadFridgeItems() async {
     try {
       final items = await _repository.getFridgeItems();
@@ -98,62 +72,46 @@ class _FridgePageState extends State<FridgePage> {
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
         _showErrorSnackBar('아이템을 불러오는데 실패했습니다.');
       }
     }
   }
 
-  // ========== 빌드 메서드 ==========
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Scaffold로 감싸서 FAB 사용 가능하게 함
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 500),
             child: Column(
               children: [
-                // 상단 헤더 (+ 버튼 제거)
                 BlueHeader(
                   icon: Icons.kitchen,
                   title: '나의 냉장고',
                   subtitle: '${_filterCounts['All'] ?? 0} 개의 재료가 있어요!',
                 ),
-
-                // 메인 콘텐츠
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Column(
                       children: [
                         const SizedBox(height: 24),
-
-                        // 검색바
                         CompactSearchBar(
                           controller: _searchController,
                           focusNode: _focusNode,
                           onChanged: _onSearchChanged,
                         ),
-
                         const SizedBox(height: 24),
-
-                        // 위치 필터바
                         FridgeFilterBar(
                           selectedFilter: _selectedFilter,
                           filterCounts: _filterCounts,
                           onFilterChanged: _onFilterChanged,
                         ),
-
                         const SizedBox(height: 12),
-
-                        // 아이템 리스트
                         Expanded(child: _buildItemsList()),
                       ],
                     ),
@@ -164,26 +122,18 @@ class _FridgePageState extends State<FridgePage> {
           ),
         ),
       ),
-
-      // 오른쪽 하단 FAB 추가
       floatingActionButton: FloatingActionButton(
         onPressed: _onAddItemPressed,
-        backgroundColor: const Color.fromARGB(255, 30, 0, 255), // 파랑색
+        backgroundColor: const Color.fromARGB(255, 30, 0, 255),
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  /// 아이템 리스트 빌드
   Widget _buildItemsList() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_filteredItems.isEmpty) {
-      return _buildEmptyState();
-    }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_filteredItems.isEmpty) return _buildEmptyState();
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
@@ -198,8 +148,8 @@ class _FridgePageState extends State<FridgePage> {
             return FridgeItemCard(
               item: item,
               onTap: () => _onItemTapped(item),
-              onEdit: () => _onItemEdit(item),
-              onDelete: () => _onItemDelete(item),
+              onEdit: () => _onItemEdit(item), // [구현]
+              onDelete: () => _onItemDelete(item), // [구현]
             );
           },
         ),
@@ -207,7 +157,6 @@ class _FridgePageState extends State<FridgePage> {
     );
   }
 
-  /// 빈 상태 위젯
   Widget _buildEmptyState() {
     String message;
     IconData icon;
@@ -238,8 +187,8 @@ class _FridgePageState extends State<FridgePage> {
             const SizedBox(height: 24),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color.fromARGB(255, 30, 0, 255), // 버튼 배경색
-                foregroundColor: Colors.white, // 텍스트 + 아이콘 색상
+                backgroundColor: Color.fromARGB(255, 30, 0, 255),
+                foregroundColor: Colors.white,
               ),
               onPressed: _onAddItemPressed,
               icon: const Icon(Icons.add),
@@ -251,58 +200,52 @@ class _FridgePageState extends State<FridgePage> {
     );
   }
 
-  // ========== 이벤트 핸들러들 ==========
+  // ===== 이벤트 핸들러 =====
 
-  /// 검색 텍스트 변경 처리
-  void _onSearchChanged([String? value]) {
-    setState(() {
-      // 검색 결과 업데이트
-    });
-  }
+  void _onSearchChanged([String? _]) => setState(() {});
 
-  /// 위치 필터 변경 처리
   void _onFilterChanged(String newFilter) {
-    setState(() {
-      _selectedFilter = newFilter;
-    });
+    setState(() => _selectedFilter = newFilter);
   }
 
-  /// 아이템 추가 버튼 처리 (다이얼로그 활성화)
   void _onAddItemPressed() async {
     final newItem = await AddItemDialog.show(context);
     if (newItem != null) {
       try {
         await _repository.addFridgeItem(newItem);
-        _loadFridgeItems(); // 목록 다시 불러오기
+        await _loadFridgeItems();
         _showSuccessSnackBar('${newItem.name}이(가) 추가되었습니다');
-      } catch (e) {
+      } catch (_) {
         _showErrorSnackBar('아이템 추가에 실패했습니다');
       }
     }
   }
 
-  /// 아이템 탭 처리
   void _onItemTapped(FridgeItem item) {
-    // ignore: todo
-    // TODO: 아이템 상세보기 다이얼로그 또는 페이지 이동
     _showInfoSnackBar('${item.name} 상세보기');
   }
 
-  /// 아이템 수정 처리
-  void _onItemEdit(FridgeItem item) {
-    // ignore: todo
-    // TODO: 아이템 수정 다이얼로그
-    _showInfoSnackBar('${item.name} 수정 기능은 준비 중입니다');
+  /// [변경] 실제 수정 로직 구현: 다이얼로그 → 저장 → 새로고침
+  Future<void> _onItemEdit(FridgeItem item) async {
+    final updated = await EditItemDialog.show(context, item);
+    if (updated == null) return;
+
+    try {
+      // 기존 시그니처 호환: (name, updatedItem)
+      await _repository.updateFridgeItem(item.name, updated);
+      await _loadFridgeItems();
+      _showSuccessSnackBar('${item.name}이(가) 수정되었습니다');
+    } catch (_) {
+      _showErrorSnackBar('수정에 실패했습니다');
+    }
   }
 
-  /// 아이템 삭제 처리
   void _onItemDelete(FridgeItem item) {
     _showDeleteConfirmDialog(item);
   }
 
-  // ========== 다이얼로그 및 스낵바 ==========
+  // ===== 다이얼로그 & 스낵바 =====
 
-  /// 삭제 확인 다이얼로그
   void _showDeleteConfirmDialog(FridgeItem item) {
     showDialog(
       context: context,
@@ -315,9 +258,9 @@ class _FridgePageState extends State<FridgePage> {
             child: const Text('취소'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              _deleteItem(item);
+              await _deleteItem(item);
             },
             child: const Text('삭제'),
           ),
@@ -326,74 +269,58 @@ class _FridgePageState extends State<FridgePage> {
     );
   }
 
-  /// 아이템 삭제 실행
   Future<void> _deleteItem(FridgeItem item) async {
     try {
+      // 기본: 이름으로 삭제(기존 시그니처 유지)
       await _repository.deleteFridgeItem(item.name);
-      _loadFridgeItems(); // 리스트 새로고침
+
+      // 만약 동명이인/중복우려가 있으면 아래로 교체 가능:
+      // await _repository.deleteFridgeItemByKey(item.name, item.location);
+
+      await _loadFridgeItems();
       _showSuccessSnackBar('${item.name}이(가) 삭제되었습니다');
-    } catch (e) {
+    } catch (_) {
       _showErrorSnackBar('삭제에 실패했습니다');
     }
   }
 
-  // ========== 개선된 스낵바 헬퍼들 ==========
-
-  /// 모든 SnackBar를 즉시 제거하는 메서드
   void _clearAllSnackBars() {
-    if (mounted) {
-      ScaffoldMessenger.of(context).clearSnackBars();
-    }
+    if (mounted) ScaffoldMessenger.of(context).clearSnackBars();
   }
 
-  /// 기존 SnackBar 제거 후 새 SnackBar 표시하는 공통 메서드
   void _showSnackBar({
     required String message,
     required Color backgroundColor,
-    Duration duration = const Duration(milliseconds: 1500), // 기본 1.5초로 단축
+    Duration duration = const Duration(milliseconds: 1500),
   }) {
     if (!mounted) return;
-
-    // 기존 SnackBar를 즉시 제거
     _clearAllSnackBars();
-
-    // 새 SnackBar 표시
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: backgroundColor,
         duration: duration,
-        behavior: SnackBarBehavior.floating, // 플로팅 스타일로 더 빠른 반응성
+        behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
 
-  /// 성공 스낵바 (개선됨)
-  void _showSuccessSnackBar(String message) {
-    _showSnackBar(
-      message: message,
-      backgroundColor: const Color.fromARGB(255, 30, 0, 255),
-      duration: const Duration(milliseconds: 1200), // 성공 메시지는 더 짧게
-    );
-  }
+  void _showSuccessSnackBar(String message) => _showSnackBar(
+    message: message,
+    backgroundColor: const Color.fromARGB(255, 30, 0, 255),
+    duration: const Duration(milliseconds: 1200),
+  );
 
-  /// 오류 스낵바 (개선됨)
-  void _showErrorSnackBar(String message) {
-    _showSnackBar(
-      message: message,
-      backgroundColor: Colors.red,
-      duration: const Duration(milliseconds: 2000), // 오류 메시지는 조금 더 길게
-    );
-  }
+  void _showErrorSnackBar(String message) => _showSnackBar(
+    message: message,
+    backgroundColor: Colors.red,
+    duration: const Duration(milliseconds: 2000),
+  );
 
-  /// 정보 스낵바 (개선됨)
-  void _showInfoSnackBar(String message) {
-    _showSnackBar(
-      message: message,
-      backgroundColor: Color.fromARGB(255, 30, 0, 255),
-      duration: const Duration(milliseconds: 1500), // 정보 메시지는 기본 길이
-    );
-  }
+  void _showInfoSnackBar(String message) => _showSnackBar(
+    message: message,
+    backgroundColor: const Color.fromARGB(255, 30, 0, 255),
+  );
 }

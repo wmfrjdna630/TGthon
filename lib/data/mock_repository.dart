@@ -336,6 +336,31 @@ class MockRepository {
     _todoItemsController.add(List.from(_todoItems));
   }
 
+  /// (선택) 위치까지 키로 구분해서 삭제하고 싶은 경우 사용
+  Future<void> deleteFridgeItemByKey(String name, String location) async {
+    await _simulateNetworkDelay();
+    _fridgeItems.removeWhere(
+      (item) => item.name == name && item.location == location,
+    );
+    _fridgeItemsController.add(List.from(_fridgeItems));
+  }
+
+  /// (선택) 이름+위치로 특정 항목만 갱신하고 싶은 경우 사용
+  Future<void> updateFridgeItemByKey({
+    required String originalName,
+    required String originalLocation,
+    required FridgeItem updatedItem,
+  }) async {
+    await _simulateNetworkDelay();
+    final idx = _fridgeItems.indexWhere(
+      (e) => e.name == originalName && e.location == originalLocation,
+    );
+    if (idx != -1) {
+      _fridgeItems[idx] = updatedItem;
+      _fridgeItemsController.add(List.from(_fridgeItems));
+    }
+  }
+
   /// 리소스 정리
   void dispose() {
     _fridgeItemsController.close();
