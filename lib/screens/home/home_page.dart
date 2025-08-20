@@ -210,15 +210,6 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Column(
                       children: [
-                        // 검색
-                        CompactSearchBar(
-                          controller: _searchController,
-                          focusNode: _searchFocus,
-                          onChanged: (_) => _loadMenus(), // 즉시 재조회
-                        ),
-
-                        const SizedBox(height: 24),
-
                         // 냉장고 타임라인
                         FridgeTimeline(
                           userName: name,
