@@ -11,7 +11,7 @@ class RecipeRepository {
 
   RecipeRepository({required this.api});
 
-  /// UI 필터를 API 파라미터로 매핑하여 검색
+  /// 단일 페이지 조회 (기존 로직 유지)
   Future<List<UnifiedRecipe>> searchUnified({
     String? keyword, // RCP_NM
     String? dishType, // RCP_PAT2
@@ -77,6 +77,80 @@ class RecipeRepository {
       include: include,
       page: page,
       pageSize: pageSize,
+    );
+    return unified.map((u) => u.asMenuRec()).toList();
+  }
+
+  // =========================
+  // 🔥 여기부터 "전부 불러오기" 유틸
+  // =========================
+
+  /// API 페이지를 끝까지 돌며 전부 가져오는 헬퍼
+  /// - 안전장치: maxPages / maxTotal
+  Future<List<UnifiedRecipe>> fetchAllUnified({
+    String? keyword,
+    String? dishType,
+    String? include,
+    int pageSize = 100, // 크게 요청해서 왕복 수를 줄임
+    int maxPages = 200, // 비정상 루프 방지
+    int maxTotal = 20000, // 과도한 수집 방지
+  }) async {
+    final List<UnifiedRecipe> all = [];
+    var page = 1;
+
+    while (true) {
+      final batch = await searchUnified(
+        keyword: keyword,
+        dishType: dishType,
+        include: include,
+        page: page,
+        pageSize: pageSize,
+      );
+      all.addAll(batch);
+
+      final reachedEnd = batch.length < pageSize;
+      final reachedLimit = page >= maxPages || all.length >= maxTotal;
+      if (reachedEnd || reachedLimit) break;
+
+      page += 1;
+    }
+    return all;
+  }
+
+  Future<List<Recipe>> fetchAllRecipes({
+    String? keyword,
+    String? dishType,
+    String? include,
+    int pageSize = 100,
+    int maxPages = 200,
+    int maxTotal = 20000,
+  }) async {
+    final unified = await fetchAllUnified(
+      keyword: keyword,
+      dishType: dishType,
+      include: include,
+      pageSize: pageSize,
+      maxPages: maxPages,
+      maxTotal: maxTotal,
+    );
+    return unified.map((u) => u.asRecipe()).toList();
+  }
+
+  Future<List<MenuRec>> fetchAllMenus({
+    String? keyword,
+    String? dishType,
+    String? include,
+    int pageSize = 100,
+    int maxPages = 200,
+    int maxTotal = 20000,
+  }) async {
+    final unified = await fetchAllUnified(
+      keyword: keyword,
+      dishType: dishType,
+      include: include,
+      pageSize: pageSize,
+      maxPages: maxPages,
+      maxTotal: maxTotal,
     );
     return unified.map((u) => u.asMenuRec()).toList();
   }

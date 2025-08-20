@@ -1,4 +1,5 @@
 // lib/screens/recipes/recipes_page.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/common/blue_header.dart';
 import '../../widgets/recipes/recipe_card.dart';
@@ -12,9 +13,8 @@ import '../../widgets/common/compact_search_bar.dart';
 /// 정렬 모드 (홈과 동일한 의미)
 enum RecipeSortMode { expiry, frequency, favorite }
 
-/// 레시피 페이지 - 단일 더미(한글) 사용
-/// 상단 카테고리: 전체 / 한식 / 중식 / 양식 / 일식 / 간식
-/// 정렬 탭: 유통기한순 / 빈도순 / 즐겨찾는순
+/// 레시피 페이지
+/// - 전체 로드(fetchAll) 후 클라이언트에서 10개씩 페이지네이션
 class RecipesPage extends StatefulWidget {
   const RecipesPage({super.key});
 
@@ -35,20 +35,30 @@ class _RecipesPageState extends State<RecipesPage> {
   List<MenuRec> _allMenus = []; // 정렬에 필요한 홈 속성 참조
   bool _isLoading = true;
 
+  // 클라이언트 페이지네이션(10개씩)
+  static const int _pageSize = 10;
+  int _currentPage = 1;
+
+  // 검색 디바운스
+  Timer? _debounce;
+
   // ===== 파생 =====
+  // 카테고리 카운트: ['전체','밥','국&찌개','반찬','후식'] 기준
   Map<String, int> get _categoryCounts {
     final base = <String, int>{
       '전체': _allRecipes.length,
-      '한식': 0,
-      '중식': 0,
-      '양식': 0,
-      '일식': 0,
-      '간식': 0,
+      '밥': 0,
+      '국&찌개': 0,
+      '반찬': 0,
+      '후식': 0,
     };
+
     for (final r in _allRecipes) {
-      for (final c in ['한식', '중식', '양식', '일식', '간식']) {
-        if (r.tags.contains(c)) base[c] = (base[c] ?? 0) + 1;
-      }
+      final tagsLower = r.tags.map((t) => t.trim().toLowerCase()).toSet();
+      if (tagsLower.contains('밥')) base['밥'] = (base['밥'] ?? 0) + 1;
+      if (tagsLower.contains('국&찌개')) base['국&찌개'] = (base['국&찌개'] ?? 0) + 1;
+      if (tagsLower.contains('반찬')) base['반찬'] = (base['반찬'] ?? 0) + 1;
+      if (tagsLower.contains('후식')) base['후식'] = (base['후식'] ?? 0) + 1;
     }
     return base;
   }
@@ -56,18 +66,23 @@ class _RecipesPageState extends State<RecipesPage> {
   int get _canMakeCount => _allRecipes.where((r) => r.canMakeNow).length;
   int get _almostReadyCount => _allRecipes.where((r) => r.isAlmostReady).length;
 
+  int get _totalPages {
+    final total = _displayListUnpaged.length;
+    return (total / _pageSize).ceil().clamp(1, 9999);
+  }
+
   // ===== 라이프사이클 =====
   @override
   void initState() {
     super.initState();
     _repository = RecipeRepository(
       api: const RecipeApi(
-        base: 'http://openapi.foodsafetykorea.go.kr', // 환경변수로 빼도 됨
-        keyId: 'b98006370cc24b529436', // ★ 발급키 넣기
+        base: 'http://openapi.foodsafetykorea.go.kr', // TODO: 환경변수로 추출 가능
+        keyId: 'b98006370cc24b529436', // ★ 발급키 삽입
         serviceId: 'COOKRCP01',
       ),
     );
-    _loadUnified();
+    _loadAll(); // 최초 전체 로드
   }
 
   @override
@@ -75,31 +90,37 @@ class _RecipesPageState extends State<RecipesPage> {
     _clearAllSnackBars();
     _searchController.dispose();
     _focusNode.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
-  Future<void> _loadUnified() async {
+  // =========================
+  // 데이터 로드
+  // =========================
+  Future<void> _loadAll() async {
     try {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+        _currentPage = 1; // 검색/필터 변경 시 첫 페이지로
+      });
 
-      final dish = _mapCategoryToRcpPat2(_selectedCategory); // 칩 → API값
       final keyword = _searchController.text.trim().isEmpty
           ? null
           : _searchController.text.trim();
+      final dish = _mapCategoryToRcpPat2(_selectedCategory); // 카테고리 → API 값
 
-      final recipes = await _repository.searchRecipes(
-        keyword: keyword, // RCP_NM
-        dishType: dish, // RCP_PAT2
-        include: null, // 필요 시 보유재료의 대표 1~2개를 넣어 1차 검색
-        page: 1,
-        pageSize: 20,
-      );
-      final menus = await _repository.searchMenus(
+      // 🔥 전체 로드: fetchAll 사용 (한 번만 네트워크)
+      final recipes = await _repository.fetchAllRecipes(
         keyword: keyword,
         dishType: dish,
         include: null,
-        page: 1,
-        pageSize: 20,
+        pageSize: 100, // 페이지당 크게 가져와 왕복 줄임
+      );
+      final menus = await _repository.fetchAllMenus(
+        keyword: keyword,
+        dishType: dish,
+        include: null,
+        pageSize: 100,
       );
 
       if (!mounted) return;
@@ -115,8 +136,10 @@ class _RecipesPageState extends State<RecipesPage> {
     }
   }
 
-  // ===== 정렬/필터 후 리스트 =====
-  List<Recipe> get _displayList {
+  // =========================
+  // 정렬/필터 후 리스트 (페이지네이션 전)
+  // =========================
+  List<Recipe> get _displayListUnpaged {
     if (_isLoading) return const [];
 
     // 1) 정렬 기준: MenuRec 속성에 의존 (minDaysLeft, favorite 등)
@@ -160,14 +183,27 @@ class _RecipesPageState extends State<RecipesPage> {
       if (r != null) ordered.add(r);
     }
 
-    // 3) 카테고리 필터
+    // 3) 카테고리 필터(로컬 기준으로도 한 번 더 방어)
     if (_selectedCategory != '전체') {
-      ordered = ordered
-          .where((r) => r.tags.contains(_selectedCategory))
-          .toList();
+      final want = _selectedCategory;
+      ordered = ordered.where((r) {
+        final tagsLower = r.tags.map((t) => t.trim().toLowerCase()).toSet();
+        switch (want) {
+          case '밥':
+            return tagsLower.contains('밥');
+          case '국&찌개':
+            return tagsLower.contains('국&찌개');
+          case '반찬':
+            return tagsLower.contains('반찬');
+          case '후식':
+            return tagsLower.contains('후식');
+          default:
+            return true;
+        }
+      }).toList();
     }
 
-    // 4) 검색
+    // 4) 검색(제목/태그)
     final q = _searchController.text.trim().toLowerCase();
     if (q.isNotEmpty) {
       ordered = ordered.where((r) {
@@ -177,6 +213,16 @@ class _RecipesPageState extends State<RecipesPage> {
     }
 
     return ordered;
+  }
+
+  // 실제 그릴 페이지 조각
+  List<Recipe> get _displayPage {
+    final list = _displayListUnpaged;
+    if (list.isEmpty) return const [];
+    final start = (_currentPage - 1) * _pageSize;
+    final end = (start + _pageSize).clamp(0, list.length);
+    if (start >= list.length) return const [];
+    return list.sublist(start, end);
   }
 
   // ======= UI =======
@@ -200,28 +246,42 @@ class _RecipesPageState extends State<RecipesPage> {
                       const SizedBox(height: 24),
                       CompactSearchBar(
                         controller: _searchController,
-                        onChanged: (_) {
-                          setState(() {});
-                          _loadUnified();
-                        },
+                        onChanged: _onSearchChangedDebounced,
                         focusNode: _focusNode,
                       ),
                       const SizedBox(height: 16),
                       _CategoryChips(
                         selected: _selectedCategory,
                         counts: _categoryCounts,
-                        onChanged: (c) {
-                          setState(() => _selectedCategory = c);
-                          _loadUnified();
+                        onChanged: (c) async {
+                          // 네트워크 재호출 없이 UX용 짧은 로딩만 표시
+                          setState(() {
+                            _selectedCategory = c;
+                            _isLoading = true;
+                            _currentPage = 1;
+                          });
+                          await Future.delayed(
+                            const Duration(milliseconds: 150),
+                          );
+                          if (!mounted) return;
+                          setState(() {
+                            _isLoading = false;
+                          });
+                          // 만약 카테고리 변경에 따라 API 필터도 적용하고 싶으면 아래 주석 해제:
+                          // await _loadAll();
                         },
                       ),
                       const SizedBox(height: 8),
                       _SortChips(
                         current: _sortMode,
-                        onChanged: (m) => setState(() => _sortMode = m),
+                        onChanged: (m) => setState(() {
+                          _sortMode = m;
+                          _currentPage = 1;
+                        }),
                       ),
                       const SizedBox(height: 12),
                       Expanded(child: _buildList()),
+                      _buildPaginator(),
                     ],
                   ),
                 ),
@@ -235,7 +295,7 @@ class _RecipesPageState extends State<RecipesPage> {
 
   Widget _buildList() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-    final list = _displayList;
+    final list = _displayPage;
     if (list.isEmpty) return _buildEmpty();
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -272,6 +332,37 @@ class _RecipesPageState extends State<RecipesPage> {
     );
   }
 
+  // 하단 페이지네이션(이전/다음 + 현재/총 페이지)
+  Widget _buildPaginator() {
+    final total = _totalPages;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _PgBtn(
+            icon: Icons.chevron_left,
+            onTap: _currentPage > 1
+                ? () => setState(() => _currentPage -= 1)
+                : null,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$_currentPage / $total',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 8),
+          _PgBtn(
+            icon: Icons.chevron_right,
+            onTap: _currentPage < total
+                ? () => setState(() => _currentPage += 1)
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
   // ===== 스낵바 =====
   void _clearAllSnackBars() {
     if (mounted) ScaffoldMessenger.of(context).clearSnackBars();
@@ -300,6 +391,8 @@ class _RecipesPageState extends State<RecipesPage> {
     if (menu.hasAllRequired) return 0;
     final msg = (menu.needMessage).trim();
     if (msg.isEmpty) return 999;
+
+    // NOTE: 현재는 안내문을 토큰으로 나누어 개수 추정 (정확 매칭 원하면 MenuRec에 재료 리스트 필드가 필요)
     final parts = msg
         .toLowerCase()
         .replaceAll('!', ' ')
@@ -315,14 +408,14 @@ class _RecipesPageState extends State<RecipesPage> {
   }
 
   String? _mapCategoryToRcpPat2(String ui) {
-    // API 예: 반찬/국/후식/밥/면 …
+    // API 예: '반찬', '국', '후식', '밥', '면' …
     switch (ui) {
       case '전체':
         return null;
       case '밥':
         return '밥';
       case '국&찌개':
-        return '국';
+        return '국&찌개'; // API에는 '찌개'가 별도 분류가 아닐 수 있어 '국'으로 맵핑
       case '반찬':
         return '반찬';
       case '후식':
@@ -330,6 +423,13 @@ class _RecipesPageState extends State<RecipesPage> {
       default:
         return null;
     }
+  }
+
+  void _onSearchChangedDebounced(String _) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () async {
+      await _loadAll(); // 검색어 반영하여 전체 재조회
+    });
   }
 }
 
@@ -448,6 +548,35 @@ class _SortChips extends StatelessWidget {
         chip('빈도순', RecipeSortMode.frequency),
         chip('즐겨찾는순', RecipeSortMode.favorite),
       ],
+    );
+  }
+}
+
+// ===== 페이지네이션 버튼 위젯 =====
+class _PgBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _PgBtn({required this.icon, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: enabled ? Colors.black12 : Colors.black12.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.all(6),
+        child: Icon(
+          icon,
+          size: 18,
+          color: enabled ? Colors.black87 : Colors.black38,
+        ),
+      ),
     );
   }
 }
