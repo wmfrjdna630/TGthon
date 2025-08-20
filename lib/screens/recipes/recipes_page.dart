@@ -142,32 +142,57 @@ class _RecipesPageState extends State<RecipesPage> {
   List<Recipe> get _displayListUnpaged {
     if (_isLoading) return const [];
 
-    // 1) 정렬 기준: MenuRec 속성에 의존 (minDaysLeft, favorite 등)
+    // 1) 정렬 기준: MenuRec 정렬 → Recipe 매핑
     final byTitle = {for (final r in _allRecipes) r.title: r};
     List<MenuRec> menus = List<MenuRec>.from(_allMenus);
 
+    // 헬퍼: Recipe 기반 부족 개수 (문자열 파싱 대신 모델 데이터 사용)
+    int missingByRecipe(MenuRec m) =>
+        byTitle[m.title]?.missingIngredients ?? 999;
+
     switch (_sortMode) {
       case RecipeSortMode.expiry:
-        menus.sort((a, b) => a.minDaysLeft.compareTo(b.minDaysLeft));
+        // ✅ 7일 미만(임박) 우선 그룹 → 그 다음 나머지
+        menus.sort((a, b) {
+          final aUrgent = a.minDaysLeft < 7 ? 0 : 1;
+          final bUrgent = b.minDaysLeft < 7 ? 0 : 1;
+          if (aUrgent != bUrgent) return aUrgent - bUrgent;
+
+          // 같은 그룹에서는 남은 일수 오름차순
+          final dl = a.minDaysLeft.compareTo(b.minDaysLeft);
+          if (dl != 0) return dl;
+
+          // 즐겨찾기(내림차순) → 제목
+          if (a.favorite != b.favorite) {
+            return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
+          }
+          return a.title.compareTo(b.title);
+        });
         break;
+
       case RecipeSortMode.frequency:
-        // 홈과 동일 로직: 부족한 필수재료 < 3 인 메뉴만, 부족 개수 오름차순.
-        final owned = SampleData.fridgeItems
-            .map((e) => e.name.trim().toLowerCase())
-            .toSet();
-        int missing(MenuRec m) => _missingRequiredCount(m, owned);
-        menus = menus.where((m) => missing(m) < 3).toList()
-          ..sort((a, b) {
-            final am = missing(a), bm = missing(b);
-            if (am != bm) return am.compareTo(bm);
-            final ex = a.minDaysLeft.compareTo(b.minDaysLeft);
-            if (ex != 0) return ex;
-            if (a.favorite != b.favorite) {
-              return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
-            }
-            return a.title.compareTo(b.title);
-          });
+        // ✅ 필수재료-보유재료 "부족 개수"가 적은 순
+        menus.sort((a, b) {
+          final am = missingByRecipe(a);
+          final bm = missingByRecipe(b);
+          if (am != bm) return am.compareTo(bm);
+
+          // 동률이면 유통기한 임박 우선
+          final aUrgent = a.minDaysLeft < 7 ? 0 : 1;
+          final bUrgent = b.minDaysLeft < 7 ? 0 : 1;
+          if (aUrgent != bUrgent) return aUrgent - bUrgent;
+
+          final dl = a.minDaysLeft.compareTo(b.minDaysLeft);
+          if (dl != 0) return dl;
+
+          // 즐겨찾기(내림차순) → 제목
+          if (a.favorite != b.favorite) {
+            return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
+          }
+          return a.title.compareTo(b.title);
+        });
         break;
+
       case RecipeSortMode.favorite:
         menus.sort((a, b) {
           if (a.favorite == b.favorite) return a.title.compareTo(b.title);
@@ -183,7 +208,7 @@ class _RecipesPageState extends State<RecipesPage> {
       if (r != null) ordered.add(r);
     }
 
-    // 3) 카테고리 필터(로컬 기준으로도 한 번 더 방어)
+    // 3) 카테고리 필터(로컬 방어)
     if (_selectedCategory != '전체') {
       final want = _selectedCategory;
       ordered = ordered.where((r) {
@@ -386,13 +411,13 @@ class _RecipesPageState extends State<RecipesPage> {
   void _showInfoSnackBar(String m) =>
       _showSnackBar(m, const Color.fromARGB(255, 30, 0, 255));
 
-  // ===== 홈의 빈도순 로직과 동일한 "부족 개수" 계산기 =====
+  // ===== (이전 임시 로직) 문자열 파싱 기반 부족 계산 =====
+  // 현재는 사용하지 않지만, 회귀 대비 남겨둡니다.
   int _missingRequiredCount(MenuRec menu, Set<String> owned) {
     if (menu.hasAllRequired) return 0;
     final msg = (menu.needMessage).trim();
     if (msg.isEmpty) return 999;
 
-    // NOTE: 현재는 안내문을 토큰으로 나누어 개수 추정 (정확 매칭 원하면 MenuRec에 재료 리스트 필드가 필요)
     final parts = msg
         .toLowerCase()
         .replaceAll('!', ' ')
