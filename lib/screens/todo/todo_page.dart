@@ -5,7 +5,6 @@ import '../../data/mock_repository.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
-import '../../widgets/common/compact_search_bar.dart';
 
 /// 할일 페이지 - 할일 목록 관리
 /// 할일 추가, 완료 처리, 필터링, 검색 기능 제공
