@@ -185,7 +185,6 @@ class _TimelineVisualization extends StatelessWidget {
 
         // 칩 치수/여백 추정치
         const double chipWidth = 64.0; // 4글자 + padding 고려
-        const double chipHeight = 28.0;
         const double minGapX = 8.0; // 칩 가로 간격 최소치
         const double rowGap = 36.0; // 레일 간 세로 간격
         const int maxRails = 24; // 안전 상한 (필요시 늘려도 됨)

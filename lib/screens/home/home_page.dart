@@ -6,7 +6,6 @@ import '../../widgets/home/expiry_indicator_bar.dart';
 import '../../widgets/home/dynamic_header.dart';
 import '../../widgets/home/fridge_timeline.dart';
 import '../../widgets/home/menu_recommendations.dart';
-import '../../widgets/common/compact_search_bar.dart';
 import '../../widgets/common/add_item_dialog.dart';
 
 // ==== 데이터/모델 ====

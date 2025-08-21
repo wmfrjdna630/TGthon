@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../models/recipe.dart';
+import '../../screens/recipes/recipe_detail_page.dart'; // 상세 페이지 import 추가
 
-/// 레시피 카드 위젯 - 간소화된 버전
-/// 레시피 제목과 재료 정보만 표시
+/// 레시피 카드 위젯 - 간소화된 버전 + 상세 페이지 이동
+/// 레시피 제목과 재료 정보만 표시, 클릭 시 상세 페이지로 이동
 class RecipeCard extends StatelessWidget {
   final Recipe recipe;
-  final VoidCallback? onTap; // 카드 탭 콜백
+  final VoidCallback? onTap; // 카드 탭 콜백 (기존 호환성)
   final VoidCallback? onFavorite; // 즐겨찾기 토글 콜백
 
   const RecipeCard({
@@ -43,7 +44,18 @@ class RecipeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        // 🔥 상세 페이지로 이동
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RecipeDetailPage(recipe: recipe),
+          ),
+        );
+
+        // 기존 onTap 콜백도 호출 (호환성 유지)
+        onTap?.call();
+      },
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(16),
