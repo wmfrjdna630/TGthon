@@ -8,6 +8,9 @@ import '../../widgets/home/fridge_timeline.dart';
 import '../../widgets/home/menu_recommendations.dart';
 import '../../widgets/common/add_item_dialog.dart';
 
+// ==== 화면 이동 ====
+import '../../screens/recipes/recipe_detail_page.dart'; // 🔥 새로 추가
+
 // ==== 데이터/모델 ====
 import '../../data/sample_data.dart';
 import '../../data/remote/recipe_api.dart';
@@ -155,7 +158,7 @@ class _HomePageState extends State<HomePage> {
     return list;
   }
 
-  // 홈/레시피 공통 “부족 개수” 계산기
+  // 홈/레시피 공통 "부족 개수" 계산기
   int _missingRequiredCount(MenuRec menu, Set<String> owned) {
     if (menu.hasAllRequired) return 0;
     final msg = (menu.needMessage).trim();
@@ -172,6 +175,40 @@ class _HomePageState extends State<HomePage> {
         .toSet()
         .toList();
     return tokens.length;
+  }
+
+  // ===== 🔥 새로 추가: 메뉴 클릭 처리 =====
+  /// 메뉴 추천 카드를 클릭했을 때의 처리
+  /// 1. 클릭 카운트 증가 (사용 빈도 반영)
+  /// 2. Recipe 객체로 변환 후 상세 페이지로 이동
+  void _onMenuTapped(MenuRec menu) {
+    try {
+      // 1. 클릭 횟수/최근성 로컬 반영
+      setState(() {
+        final idx = _menus.indexOf(menu);
+        if (idx >= 0) {
+          _menus[idx] = _menus[idx].incrementClick();
+        }
+      });
+
+      // 2. MenuRec을 Recipe로 변환
+      final recipe = menu.toRecipe();
+
+      // 3. 레시피 상세 페이지로 이동
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RecipeDetailPage(recipe: recipe),
+        ),
+      );
+
+      // 4. 성공 피드백 (선택사항)
+      _showSnack('${menu.title} 레시피 보기', const Color.fromARGB(255, 30, 0, 255));
+    } catch (e) {
+      // 에러 처리: 변환 실패 시 폴백
+      _showSnack('레시피 정보를 불러올 수 없습니다.', Colors.red);
+      print('MenuRec to Recipe 변환 실패: $e');
+    }
   }
 
   // ===== UI =====
@@ -236,20 +273,8 @@ class _HomePageState extends State<HomePage> {
                                 currentSortMode: _sortMode,
                                 onSortModeChanged: (m) =>
                                     setState(() => _sortMode = m),
-                                onMenuTapped: (menu) {
-                                  // 클릭수/최근성 로컬 반영
-                                  setState(() {
-                                    final idx = _menus.indexOf(menu);
-                                    if (idx >= 0) {
-                                      _menus[idx] = _menus[idx]
-                                          .incrementClick();
-                                    }
-                                  });
-                                  _showSnack(
-                                    '${menu.title} 상세로 이동',
-                                    const Color.fromARGB(255, 30, 0, 255),
-                                  );
-                                },
+                                // 🔥 수정: 메뉴 클릭 시 상세 페이지로 이동
+                                onMenuTapped: _onMenuTapped,
                                 onFavoriteToggled: (menu) {
                                   setState(() {
                                     final idx = _menus.indexOf(menu);

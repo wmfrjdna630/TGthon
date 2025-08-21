@@ -175,6 +175,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     }
   }
 
+  /// 🔥 새로 추가: 뒤로 가기 처리
+  void _handleBackPressed() {
+    Navigator.of(context).pop(); // 이전 페이지로 돌아가기
+  }
+
   @override
   void dispose() {
     _hasRetried = false; // 재시도 플래그 리셋
@@ -190,8 +195,8 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             constraints: const BoxConstraints(maxWidth: 500),
             child: Column(
               children: [
-                // 🔥 개선된 BlueHeader with 에러 처리
-                BlueHeader(
+                // 🔥 수정: BlueHeader.withBackButton 팩토리 사용
+                BlueHeader.withBackButton(
                   icon: _hasError ? Icons.error_outline : Icons.restaurant_menu,
                   title: _isLoading
                       ? '레시피 로딩 중...'
@@ -216,6 +221,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                           ),
                         )
                       : null,
+                  onBackPressed: _handleBackPressed, // 🔥 뒤로 가기 콜백 추가
                 ),
 
                 // 메인 콘텐츠

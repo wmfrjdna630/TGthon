@@ -1,3 +1,5 @@
+import 'recipe.dart';
+
 /// 메뉴 추천 모델
 /// 홈페이지에서 사용자에게 추천할 메뉴 정보를 담는 클래스
 class MenuRec {
@@ -130,6 +132,84 @@ class MenuRec {
       lastClicked: DateTime.now(),
       frequency: frequency, // 기본 빈도는 유지, actualFrequency에서 계산
     );
+  }
+
+  /// 🔥 새로 추가: MenuRec을 Recipe로 변환
+  /// 홈페이지에서 레시피 상세 페이지로 이동할 때 사용
+  Recipe toRecipe() {
+    // 카테고리에 따른 태그 생성
+    List<String> tags = [];
+
+    // 카테고리 기반 태그 추가
+    switch (category) {
+      case '밥요리':
+        tags.add('밥');
+        break;
+      case '국물요리':
+        tags.addAll(['국&찌개', 'soup']);
+        break;
+      case '계란요리':
+        tags.addAll(['egg', 'quick']);
+        break;
+      case '양식':
+        tags.add('pasta');
+        break;
+      default:
+        tags.add('기타');
+    }
+
+    // 빠른 요리인지 판단 (30분 이하)
+    if (estimatedCookingMinutes <= 30) {
+      tags.add('quick');
+    }
+
+    // 채식 요리인지 간단 판단
+    if (!title.toLowerCase().contains('고기') &&
+        !title.toLowerCase().contains('닭') &&
+        !title.toLowerCase().contains('생선')) {
+      tags.add('vegetarian');
+    }
+
+    // 필요 재료 개수 추정 (needMessage 기반)
+    int totalIngredients = _estimateIngredientsFromMessage();
+    int haveIngredients = hasAllRequired
+        ? totalIngredients
+        : (totalIngredients * 0.7).round();
+
+    return Recipe(
+      title: title,
+      timeMin: estimatedCookingMinutes,
+      servings: 2, // 기본 2인분
+      difficulty: _estimateDifficulty(),
+      ingredientsHave: haveIngredients,
+      ingredientsTotal: totalIngredients,
+      tags: tags,
+      description: hasAllRequired ? goodMessage : needMessage,
+    );
+  }
+
+  /// 필수 재료 메시지에서 재료 개수 추정
+  int _estimateIngredientsFromMessage() {
+    if (needMessage.isEmpty && goodMessage.isEmpty) return 4; // 기본값
+
+    // needMessage와 goodMessage에서 재료 키워드 개수 추정
+    final message = '$needMessage $goodMessage';
+    final keywords = message
+        .toLowerCase()
+        .split(RegExp(r'[,\s]+'))
+        .where((word) => word.length > 1)
+        .toSet()
+        .length;
+
+    // 최소 3개, 최대 8개로 제한
+    return (keywords + 2).clamp(3, 8);
+  }
+
+  /// 조리시간과 카테고리 기반으로 난이도 추정
+  String _estimateDifficulty() {
+    if (estimatedCookingMinutes <= 15) return 'easy';
+    if (estimatedCookingMinutes <= 35) return 'medium';
+    return 'hard';
   }
 
   /// 복사본 생성 (일부 속성 변경) - clickCount, lastClicked 추가

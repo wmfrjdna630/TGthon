@@ -5,8 +5,10 @@ class BlueHeader extends StatelessWidget {
   final IconData icon;
   final String title;
   final String? subtitle;
-  final Widget? trailing;
+  final Widget? trailing; // 우측 위젯
   final VoidCallback? onTrailingTap;
+  final Widget? leading; // 🔥 새로 추가: 좌측 위젯 (뒤로 가기 버튼 등)
+  final VoidCallback? onLeadingTap; // 🔥 새로 추가: 좌측 위젯 탭 콜백
 
   // 👉 높이(여백) 조절용 옵션 추가: 기본을 슬림으로
   final double verticalPadding;
@@ -19,6 +21,8 @@ class BlueHeader extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.onTrailingTap,
+    this.leading, // 🔥 새로 추가
+    this.onLeadingTap, // 🔥 새로 추가
     this.verticalPadding = 14, // ⬅️ 기존 24 → 14로 축소
     this.horizontalPadding = 20, // ⬅️ 기존 24 → 20로 축소
   });
@@ -53,6 +57,26 @@ class BlueHeader extends StatelessWidget {
     );
   }
 
+  /// 🔥 새로 추가: 뒤로 가기 버튼이 있는 헤더 팩토리
+  factory BlueHeader.withBackButton({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    VoidCallback? onTrailingTap,
+    VoidCallback? onBackPressed,
+  }) {
+    return BlueHeader(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      trailing: trailing,
+      onTrailingTap: onTrailingTap,
+      leading: const Icon(Icons.arrow_back, color: Colors.white), // 뒤로 가기 아이콘
+      onLeadingTap: onBackPressed,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -76,7 +100,17 @@ class BlueHeader extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
+          // 🔥 새로 추가: 좌측 위젯 (뒤로 가기 버튼)
+          if (leading != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: GestureDetector(onTap: onLeadingTap, child: leading!),
+            ),
+
+          // 메인 콘텐츠 (기존)
           _buildMainContent(),
+
+          // 우측 위젯 (기존)
           if (trailing != null)
             Align(
               alignment: Alignment.centerRight,
