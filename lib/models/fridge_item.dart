@@ -37,13 +37,13 @@ class FridgeItem {
   }
 
   /// 위험도 레벨 반환
-  /// - danger: 3일 이하
-  /// - warning: 4-7일
-  /// - safe: 8일 이상
+  /// - danger: 7일 이하 (빨간색)
+  /// - warning: 8-29일 (주황색)
+  /// - safe: 30일 이상 (초록색)
   String get riskLevel {
-    if (daysLeft <= 3) return 'danger';
-    if (daysLeft <= 7) return 'warning';
-    return 'safe';
+    if (daysLeft <= 7) return 'danger'; // 7일 이하: 빨간색
+    if (daysLeft < 30) return 'warning'; // 8-29일: 주황색
+    return 'safe'; // 30일 이상: 초록색
   }
 
   /// 샘플 데이터 생성 팩토리
@@ -55,25 +55,29 @@ class FridgeItem {
     required int daysLeft,
     required int totalDays,
   }) {
-    // 유통기한에 따른 상태 결정
+    // ✅ 수정된 유통기한에 따른 상태 및 색상 결정 로직
     String status;
     Color statusColor;
 
     if (daysLeft <= 1) {
+      // 1일 이하: 오늘까지/이미 지남
       status = 'Use today';
       statusColor = const Color(0xFFE74C3C); // 빨간색
-    } else if (daysLeft <= 3) {
+    } else if (daysLeft <= 7) {
+      // 2-7일: 일주일 이내
       status = 'Use soon';
       statusColor = const Color(0xFFE74C3C); // 빨간색
-    } else if (daysLeft <= 7) {
+    } else if (daysLeft < 30) {
+      // 8-29일: 한 달 이내
       status = 'Expiring';
       statusColor = const Color(0xFFF39C12); // 주황색
     } else {
+      // 30일 이상: 신선함
       status = 'Fresh';
       statusColor = const Color(0xFF2ECC71); // 초록색
     }
 
-    // 보관위치에 따른 배경색과 아이콘 결정
+    // 보관위치에 따른 배경색과 아이콘 결정 (기존 로직 유지)
     Color background;
     IconData icon;
 

@@ -18,13 +18,13 @@ class AppColors {
 
   // ========== 상태별 색상 ==========
 
-  /// 위험 상태 (유통기한 1주 이하) - 빨간색
+  /// 위험 상태 (유통기한 7일 이하) - 빨간색
   static const Color danger = Color(0xFFE74C3C);
 
-  /// 경고 상태 (유통기한 1-4주) - 주황색
+  /// 경고 상태 (유통기한 8-29일) - 주황색
   static const Color warning = Color(0xFFF39C12);
 
-  /// 안전/성공 상태 (유통기한 4주 이상) - 초록색
+  /// 안전/성공 상태 (유통기한 30일 이상) - 초록색
   static const Color success = Color(0xFF2ECC71);
 
   /// 정보 상태
@@ -121,7 +121,7 @@ class AppColors {
   /// 진행률 바 비활성 배경색
   static const Color progressInactive = Color(0xFFF8F8F8);
 
-  // ========== 새로운 유통기한 그라데이션 색상 ==========
+  // ========== 수정된 유통기한 그라데이션 색상 ==========
 
   /// 1주 필터용 그라데이션 (빨간색만)
   static const List<Color> timelineGradientWeek = [
@@ -131,15 +131,15 @@ class AppColors {
 
   /// 1개월 필터용 그라데이션 (빨간색 -> 주황색)
   static const List<Color> timelineGradientMonth = [
-    danger, // 빨간색 (1주)
-    warning, // 주황색 (4주)
+    danger, // 빨간색 (7일 이하)
+    warning, // 주황색 (8-29일)
   ];
 
   /// 전체 필터용 그라데이션 (빨간색 -> 주황색 -> 초록색)
   static const List<Color> timelineGradientAll = [
-    danger, // 빨간색 (1주)
-    warning, // 주황색 (4주)
-    success, // 초록색 (4주 이상)
+    danger, // 빨간색 (7일 이하)
+    warning, // 주황색 (8-29일)
+    success, // 초록색 (30일 이상)
   ];
 
   // ========== 투명도 변형 ==========
@@ -162,12 +162,12 @@ class AppColors {
 
   // ========== 유틸리티 메서드들 ==========
 
-  /// 유통기한 일수에 따른 색상 반환 (새로운 기준)
-  /// 1주(7일) 이하: 빨간색, 1-4주(7-28일): 주황색, 4주 이상: 초록색
+  /// ✅ 수정된 유통기한 일수에 따른 색상 반환
+  /// 7일 이하: 빨간색, 8-29일: 주황색, 30일 이상: 초록색
   static Color getColorByDaysLeft(int daysLeft) {
-    if (daysLeft <= 7) return danger; // 1주 이하: 빨간색
-    if (daysLeft <= 28) return warning; // 1-4주: 주황색
-    return success; // 4주 이상: 초록색
+    if (daysLeft <= 7) return danger; // 7일 이하: 빨간색
+    if (daysLeft < 30) return warning; // 8-29일: 주황색
+    return success; // 30일 이상: 초록색
   }
 
   /// 필터 타입에 따른 그라데이션 색상 반환 (전체를 1년으로 수정)
@@ -184,17 +184,17 @@ class AppColors {
     }
   }
 
-  /// 필터 타입에 따른 그라데이션 stop 포인트 반환 (전체를 1년으로 수정)
+  /// ✅ 수정된 필터 타입에 따른 그라데이션 stop 포인트 반환
   static List<double> getTimelineGradientStops(String filterType) {
     switch (filterType) {
       case '1주':
         return [0.0, 1.0]; // 빨간색만
       case '1개월':
-        return [0.0, 1.0]; // 빨간색 -> 주황색
+        return [0.0, 0.25, 1.0]; // 빨간색(7일) -> 주황색(30일)
       case '1년': // 전체를 1년으로 변경
-        return [0.0, 0.25, 1.0]; // 빨간색 -> 주황색 -> 초록색
+        return [0.0, 0.08, 1.0]; // 빨간색(7일) -> 주황색(30일) -> 초록색(365일)
       default:
-        return [0.0, 0.25, 1.0];
+        return [0.0, 0.08, 1.0];
     }
   }
 
