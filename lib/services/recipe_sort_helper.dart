@@ -25,8 +25,10 @@ class RecipeSortHelper {
     var list = List<MenuRec>.from(menus);
 
     int minDaysLeft(MenuRec m) => m.minDaysLeft;
-    bool isExpiring(MenuRec m) =>
-        minDaysLeft(m) >= 0 && minDaysLeft(m) < expiryThresholdDays;
+    bool isExpiring(MenuRec m) {
+      final d = minDaysLeft(m);
+      return d >= 0 && d < expiryThresholdDays;
+    }
 
     int missingFor(MenuRec m) {
       final r = recipeByTitle[_key(m.title)];
@@ -39,7 +41,7 @@ class RecipeSortHelper {
 
     switch (mode) {
       case SortMode.expiry:
-        // 레시피 페이지: 임박(7일 미만)만 노출 후, 남은 일수/즐겨찾기/제목
+        // 임박(7일 미만)만 노출 후, 남은 일수/즐겨찾기/제목
         list = list.where(isExpiring).toList();
         list.sort((a, b) {
           final d = minDaysLeft(a).compareTo(minDaysLeft(b));
@@ -51,10 +53,13 @@ class RecipeSortHelper {
         break;
 
       case SortMode.frequency:
-        // 레시피 페이지: 보유재료 0개 메뉴 제외
+        // ✅ 레시피 페이지와 동일: 보유재료 0개 제외 + 필요 재료 15개 "미만" 유지
         list = list.where((m) {
           final r = recipeByTitle[_key(m.title)];
-          return (r?.ingredientsHave ?? 0) > 0;
+          if (r == null) return false;
+          if (r.ingredientsHave <= 0) return false;
+          if (r.ingredientsTotal >= 15) return false; // "미만" 조건
+          return true;
         }).toList();
 
         // (필요−보유) 오름차순 → 임박 여부(true 먼저) → 남은 일수 → 즐겨찾기 → 제목
@@ -64,12 +69,10 @@ class RecipeSortHelper {
           final d0 = ma.compareTo(mb);
           if (d0 != 0) return d0;
 
-          final d1 = boolDesc(
-            isExpiring(b),
-          ).compareTo(boolDesc(isExpiring(a))); // expiring=true 우선
+          final d1 = boolDesc(isExpiring(b)).compareTo(boolDesc(isExpiring(a)));
           if (d1 != 0) return d1;
 
-          final d2 = minDaysLeft(a).compareTo(minDaysLeft(b)); // 더 임박한 것 먼저
+          final d2 = minDaysLeft(a).compareTo(minDaysLeft(b));
           if (d2 != 0) return d2;
 
           if (a.favorite != b.favorite)
@@ -79,7 +82,7 @@ class RecipeSortHelper {
         break;
 
       case SortMode.favorite:
-        // 레시피 페이지: 즐겨찾기만 노출 후 제목순
+        // 즐겨찾기만 노출 후 제목순
         list = list.where((m) => m.favorite).toList();
         list.sort((a, b) => a.title.compareTo(b.title));
         break;

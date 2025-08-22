@@ -102,8 +102,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ===== 데이터 로드(전체 모수 확보) =====
-  /// 레시피 페이지와 동일한 "충분한 모수"를 홈에서도 확보하고,
-  /// 공용 정렬 규칙(RecipeSortHelper)으로 화면용 목록을 만든다.
   Future<void> _loadHomeData() async {
     try {
       setState(() => _loadingMenus = true);
@@ -113,8 +111,6 @@ class _HomePageState extends State<HomePage> {
           : _searchController.text.trim();
 
       // ---- 1) 메뉴 전체 수집 (간단 페이지 루프) ----
-      //  - Repository에 통합 fetch가 없다면 searchMenus를 페이징 호출
-      //  - API 제한/속도에 맞춰 pageSize, maxPages는 필요 시 조정
       const int pageSize = 100;
       const int maxPages = 50;
 
@@ -129,15 +125,10 @@ class _HomePageState extends State<HomePage> {
         );
         if (chunk.isEmpty) break;
         gathered.addAll(chunk);
-
-        // 안전장치: 너무 많을 때 중단(필요 시 상한 조정)
-        if (gathered.length >= 20000) break;
+        if (gathered.length >= 20000) break; // 안전상한
       }
 
       // ---- 2) Recipe 인덱스 구성 (타이틀 매핑) ----
-      //  - 홈에서도 레시피 페이지의 ingredientsHave/Total 기준을 사용하도록,
-      //    보유 메뉴(MenuRec)를 Recipe로 변환하여 인덱스 구축
-      //  - title 정규화 키로 매핑
       final List<Recipe> recipeList = gathered
           .map((m) => m.toRecipe())
           .toList();
@@ -155,15 +146,14 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _allMenus = gathered;
         _recipeByTitle = recipeIndex;
-        _menus = visible;
+        _menus = visible.take(10).toList(); // ✅ 상위 10개만 노출
         _loadingMenus = false;
       });
     } catch (e) {
-      // 실패 시 샘플 폴백 (이전 동작 유지)
+      // 실패 시 샘플 폴백
       if (!mounted) return;
       _showSnack('레시피 API 호출 실패. 샘플 데이터로 표시합니다.', Colors.orange);
 
-      // 샘플로도 동일 정렬 규칙 적용
       final sample = SampleData.menuRecommendations;
       final sampleRecipes = sample.map((m) => m.toRecipe()).toList();
       final sampleIndex = RecipeSortHelper.buildRecipeIndex(sampleRecipes);
@@ -177,7 +167,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _allMenus = sample;
         _recipeByTitle = sampleIndex;
-        _menus = visible;
+        _menus = visible.take(10).toList(); // ✅ 상위 10개만 노출(폴백도 동일)
         _loadingMenus = false;
       });
     }
@@ -195,17 +185,13 @@ class _HomePageState extends State<HomePage> {
     );
 
     setState(() {
-      _menus = visible;
+      _menus = visible.take(10).toList(); // ✅ 탭 전환 시도 10개로 제한
     });
   }
 
   // ===== 메뉴 카드 탭 처리 =====
-  /// 메뉴 추천 카드를 클릭했을 때의 처리
-  /// 1. 클릭 카운트 증가 (사용 빈도 반영)
-  /// 2. Recipe 객체로 변환 후 상세 페이지로 이동
   void _onMenuTapped(MenuRec menu) {
     try {
-      // 1. 클릭 횟수/최근성 로컬 반영
       setState(() {
         final idx = _menus.indexOf(menu);
         if (idx >= 0) {
@@ -213,10 +199,8 @@ class _HomePageState extends State<HomePage> {
         }
       });
 
-      // 2. MenuRec → Recipe 변환
       final recipe = menu.toRecipe();
 
-      // 3. 레시피 상세 페이지로 이동
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -224,7 +208,6 @@ class _HomePageState extends State<HomePage> {
         ),
       );
 
-      // 4. 성공 피드백 (선택사항)
       _showSnack('${menu.title} 레시피 보기', const Color.fromARGB(255, 30, 0, 255));
     } catch (e) {
       _showSnack('레시피 정보를 불러올 수 없습니다.', Colors.red);
@@ -288,7 +271,7 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               )
                             : MenuRecommendations(
-                                // ✅ 이미 공용 규칙으로 정렬/필터를 끝낸 결과를 그대로 넘김
+                                // 이미 공용 규칙으로 정렬/필터를 끝낸 결과(상위 10개)를 그대로 넘김
                                 menuRecommendations: _menus,
                                 currentSortMode: _sortMode,
                                 onSortModeChanged: _onSortModeChanged,
