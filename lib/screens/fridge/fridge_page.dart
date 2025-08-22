@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/common/blue_header.dart';
 import '../../widgets/fridge/fridge_filter_bar.dart';
 import '../../widgets/fridge/fridge_item_card.dart';
-import '../../data/mock_repository.dart';
+import '../../data/remote/fridge_repository.dart';
 import '../../models/fridge_item.dart';
 import '../../widgets/common/add_item_dialog.dart';
 import '../../widgets/common/compact_search_bar.dart';
@@ -21,7 +21,7 @@ class _FridgePageState extends State<FridgePage> {
   String _selectedFilter = 'All';
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final MockRepository _repository = MockRepository();
+  final FridgeRemoteRepository _repository = FridgeRemoteRepository();
 
   List<FridgeItem> _allItems = [];
   bool _isLoading = true;
@@ -72,10 +72,10 @@ class _FridgePageState extends State<FridgePage> {
           _isLoading = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showErrorSnackBar('아이템을 불러오는데 실패했습니다.');
+        _showErrorSnackBar('불러오기 실패: $e');
       }
     }
   }
@@ -215,8 +215,8 @@ class _FridgePageState extends State<FridgePage> {
         await _repository.addFridgeItem(newItem);
         await _loadFridgeItems();
         _showSuccessSnackBar('${newItem.name}이(가) 추가되었습니다');
-      } catch (_) {
-        _showErrorSnackBar('아이템 추가에 실패했습니다');
+      } catch (e) {
+        _showErrorSnackBar('추가 실패: $e');
       }
     }
   }
@@ -235,8 +235,8 @@ class _FridgePageState extends State<FridgePage> {
       await _repository.updateFridgeItem(item.name, updated);
       await _loadFridgeItems();
       _showSuccessSnackBar('${item.name}이(가) 수정되었습니다');
-    } catch (_) {
-      _showErrorSnackBar('수정에 실패했습니다');
+    } catch (e) {
+      _showErrorSnackBar('수정 실패: $e');
     }
   }
 
@@ -279,8 +279,8 @@ class _FridgePageState extends State<FridgePage> {
 
       await _loadFridgeItems();
       _showSuccessSnackBar('${item.name}이(가) 삭제되었습니다');
-    } catch (_) {
-      _showErrorSnackBar('삭제에 실패했습니다');
+    } catch (e) {
+      _showErrorSnackBar('삭제 실패: $e');
     }
   }
 
