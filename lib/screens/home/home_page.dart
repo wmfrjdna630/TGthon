@@ -1,9 +1,10 @@
 // lib/screens/home/home_page.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 // ==== 모델/헬퍼 ====
 import '../../models/recipe.dart';
-import '../../models/unified_recipe.dart';
+// import '../../models/unified_recipe.dart'; // <- 사용하지 않아 제거
 import '../../models/menu_rec.dart';
 import '../../models/fridge_item.dart';
 import '../../services/recipe_sort_helper.dart';
@@ -11,8 +12,7 @@ import '../../services/recipe_sort_helper.dart';
 // ==== 저장소/API ====
 import '../../data/recipe_repository.dart';
 import '../../data/remote/recipe_api.dart';
-import '../../data/sample_data.dart';
-import '../../data/mock_repository.dart'; // Add Item 등 로컬 목 동작에 사용
+import '../../data/remote/fridge_repository.dart';
 
 // ==== UI 위젯들 ====
 import '../../widgets/home/expiry_indicator_bar.dart';
@@ -26,7 +26,7 @@ import '../../screens/recipes/recipe_detail_page.dart';
 
 // ==== 공용 타입(enum) ====
 import 'home_types.dart';
-export 'home_types.dart'; // 기존 import 경로를 유지하는 위젯들을 위한 재노출
+export 'home_types.dart'; // 다른 위젯에서 기존 경로 기대 시 편의 제공
 
 /// 홈 메인 대시보드
 class HomePage extends StatefulWidget {
@@ -43,8 +43,13 @@ class _HomePageState extends State<HomePage> {
   final FocusNode _searchFocus = FocusNode();
 
   late final RecipeRepository _recipeRepo; // API 기반 메뉴 소스
-  final MockRepository _mockRepo = MockRepository(); // Add Item 등 목 동작
 
+  // 냉장고: Firestore 연동
+  final FridgeRemoteRepository _fridgeRepo = FridgeRemoteRepository();
+  List<FridgeItem> _fridgeItems = [];
+  bool _loadingFridge = false; // <-- 실제 UI에 표시하도록 사용
+
+  // 추천/정렬 상태
   SortMode _sortMode = SortMode.expiry;
   TimeFilter _timeFilter = TimeFilter.month;
 
@@ -56,9 +61,10 @@ class _HomePageState extends State<HomePage> {
   List<MenuRec> _allMenus = [];
   Map<String, Recipe> _recipeByTitle = {};
 
-  // 냉장고/타임라인은 샘플 데이터 사용(기존 동작 유지)
-  List<FridgeItem> get _allFridgeItems => SampleData.timelineItems;
+  // 냉장고(전체)
+  List<FridgeItem> get _allFridgeItems => _fridgeItems;
 
+  // 현재 필터 기준(주/월/3개월)
   int get _maxDaysForFilter {
     switch (_timeFilter) {
       case TimeFilter.week:
@@ -70,8 +76,11 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // 냉장고(필터 적용)
   List<FridgeItem> get _filteredFridgeItems =>
-      SampleData.getFridgeItemsByTimeFilter(_maxDaysForFilter);
+      _fridgeItems.where((it) => it.daysLeft <= _maxDaysForFilter).toList();
+
+  StreamSubscription<List<FridgeItem>>? _fridgeSub; // (선택) 실시간 반영 시 사용
 
   // ===== 라이프사이클 =====
   @override
@@ -80,7 +89,7 @@ class _HomePageState extends State<HomePage> {
 
     // -- API 키 설정: dart-define 우선, 없으면 테스트용 하드코딩 --
     const defineKey = String.fromEnvironment('FOOD_API_KEY');
-    const hardKey = 'b98006370cc24b529436'; // ⚠️ 실서비스에선 dart-define 사용 권장
+    const hardKey = 'b98006370cc24b529436'; // ⚠️ 실제 서비스에선 dart-define 사용 권장
 
     _recipeRepo = RecipeRepository(
       api: RecipeApi(
@@ -90,18 +99,53 @@ class _HomePageState extends State<HomePage> {
       ),
     );
 
-    _loadHomeData(); // 최초 로드 (전체 모수 확보 → 공용 헬퍼 정렬)
+    _loadFridgeItems(); // ← 홈 진입 시 실제 냉장고 데이터 로드
+    _loadHomeData();    // 메뉴/추천 로드
   }
 
   @override
   void dispose() {
-    _clearAllSnackBars();
+    _fridgeSub?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
     super.dispose();
   }
 
-  // ===== 데이터 로드(전체 모수 확보) =====
+  // ==============================
+  // 냉장고 로드/추가
+  // ==============================
+  Future<void> _loadFridgeItems() async {
+    setState(() => _loadingFridge = true);
+    try {
+      final items = await _fridgeRepo.getFridgeItems();
+      if (!mounted) return;
+      setState(() {
+        _fridgeItems = items;
+        _loadingFridge = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingFridge = false);
+      _showSnack('냉장고 불러오기 실패: $e', Colors.red);
+    }
+  }
+
+  Future<void> _onAddItem() async {
+    final newItem = await AddItemDialog.show(context);
+    if (newItem == null) return;
+    try {
+      await _fridgeRepo.addFridgeItem(newItem); // Firestore에 추가
+      await _loadFridgeItems();                 // 다시 불러와 홈에 반영
+      _showSnack('${newItem.name}이(가) 추가되었습니다',
+          const Color.fromARGB(255, 30, 0, 255));
+    } catch (e) {
+      _showSnack('아이템 추가에 실패했습니다: $e', Colors.red);
+    }
+  }
+
+  // ==============================
+  // 메뉴 로딩/정렬
+  // ==============================
   Future<void> _loadHomeData() async {
     try {
       setState(() => _loadingMenus = true);
@@ -118,7 +162,7 @@ class _HomePageState extends State<HomePage> {
       for (int page = 1; page <= maxPages; page++) {
         final chunk = await _recipeRepo.searchMenus(
           keyword: keyword, // RCP_NM
-          dishType: null, // 전체
+          dishType: null,   // 전체
           include: null,
           page: page,
           pageSize: pageSize,
@@ -129,9 +173,8 @@ class _HomePageState extends State<HomePage> {
       }
 
       // ---- 2) Recipe 인덱스 구성 (타이틀 매핑) ----
-      final List<Recipe> recipeList = gathered
-          .map((m) => m.toRecipe())
-          .toList();
+      final List<Recipe> recipeList =
+          gathered.map((m) => m.toRecipe()).toList();
       final recipeIndex = RecipeSortHelper.buildRecipeIndex(recipeList);
 
       // ---- 3) 공용 정렬 규칙으로 화면용 목록 산출 ----
@@ -146,28 +189,13 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _allMenus = gathered;
         _recipeByTitle = recipeIndex;
-        _menus = visible.take(10).toList(); // ✅ 상위 10개만 노출
+        _menus = visible.take(10).toList(); // 상위 10개만 노출
         _loadingMenus = false;
       });
     } catch (e) {
-      // 실패 시 샘플 폴백
       if (!mounted) return;
-      _showSnack('레시피 API 호출 실패. 샘플 데이터로 표시합니다.', Colors.orange);
-
-      final sample = SampleData.menuRecommendations;
-      final sampleRecipes = sample.map((m) => m.toRecipe()).toList();
-      final sampleIndex = RecipeSortHelper.buildRecipeIndex(sampleRecipes);
-      final visible = RecipeSortHelper.sortAndFilterMenus(
-        menus: sample,
-        recipeByTitle: sampleIndex,
-        mode: _sortMode,
-        expiryThresholdDays: 7,
-      );
-
+      _showSnack('레시피 API 호출 실패', Colors.red);
       setState(() {
-        _allMenus = sample;
-        _recipeByTitle = sampleIndex;
-        _menus = visible.take(10).toList(); // ✅ 상위 10개만 노출(폴백도 동일)
         _loadingMenus = false;
       });
     }
@@ -185,7 +213,7 @@ class _HomePageState extends State<HomePage> {
     );
 
     setState(() {
-      _menus = visible.take(10).toList(); // ✅ 탭 전환 시도 10개로 제한
+      _menus = visible.take(10).toList(); // 탭 전환 시도 10개로 제한
     });
   }
 
@@ -208,176 +236,210 @@ class _HomePageState extends State<HomePage> {
         ),
       );
 
-      _showSnack('${menu.title} 레시피 보기', const Color.fromARGB(255, 30, 0, 255));
+      _showSnack('${menu.title} 레시피 보기',
+          const Color.fromARGB(255, 30, 0, 255));
     } catch (e) {
-      _showSnack('레시피 정보를 불러올 수 없습니다.', Colors.red);
-      // ignore: avoid_print
-      print('MenuRec to Recipe 변환 실패: $e');
+      _showSnack('레시피 이동 중 오류: $e', Colors.red);
     }
   }
 
-  // ===== UI =====
+  // ==============================
+  // UI
+  // ==============================
   @override
   Widget build(BuildContext context) {
     final name = widget.userName;
 
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 500),
-              child: Column(
-                children: [
-                  const SizedBox(height: 16),
-
-                  // 상단 동적 헤더
-                  DynamicHeader(
-                    fridgeItems: _allFridgeItems,
-                    menuRecommendations: _menus,
-                    todoCount: 3, // TODO: 실제 TODO 개수로 교체
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // 유통기한 인디케이터
-                  ExpiryIndicatorBar(fridgeItems: _allFridgeItems),
-
-                  const SizedBox(height: 16),
-
-                  // 메인 콘텐츠
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Column(
-                      children: [
-                        // 냉장고 타임라인
-                        FridgeTimeline(
-                          userName: name,
-                          fridgeItems: _filteredFridgeItems,
-                          currentFilter: _timeFilter,
-                          onFilterChanged: (f) =>
-                              setState(() => _timeFilter = f),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // 메뉴 추천
-                        _loadingMenus
-                            ? const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 24),
-                                child: Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              )
-                            : MenuRecommendations(
-                                // 이미 공용 규칙으로 정렬/필터를 끝낸 결과(상위 10개)를 그대로 넘김
-                                menuRecommendations: _menus,
-                                currentSortMode: _sortMode,
-                                onSortModeChanged: _onSortModeChanged,
-                                onMenuTapped: _onMenuTapped,
-                                onFavoriteToggled: (menu) {
-                                  setState(() {
-                                    final idx = _menus.indexOf(menu);
-                                    if (idx >= 0) {
-                                      _menus[idx] = _menus[idx].copyWith(
-                                        favorite: !menu.favorite,
-                                      );
-                                    }
-                                  });
-                                },
-                              ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      appBar: AppBar(
+        title: const Text('홈'),
+        actions: [
+          IconButton(
+            tooltip: '재료 추가',
+            onPressed: _onAddItem,
+            icon: const Icon(Icons.add_circle_outline),
           ),
-        ),
+        ],
+        bottom: _loadingFridge
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(3),
+                child: LinearProgressIndicator(minHeight: 3),
+              )
+            : null,
       ),
-
-      // Quick Action FAB
-      floatingActionButton: FloatingActionButton(
-        onPressed: _onQuickActionPressed,
-        backgroundColor: const Color.fromARGB(255, 30, 0, 255),
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  // ===== Quick Actions =====
-  void _onQuickActionPressed() => _showQuickActionDialog();
-
-  void _showQuickActionDialog() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 24),
           children: [
-            const Text(
-              'Quick Actions',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 500),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 16),
 
-            // Add Item
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color.fromARGB(255, 30, 0, 255),
-                child: Icon(Icons.add, color: Colors.white),
+                    // 상단 동적 헤더
+                    DynamicHeader(
+                      fridgeItems: _allFridgeItems,
+                      menuRecommendations: _menus,
+                      todoCount: 3, // TODO: 실제 TODO 개수로 교체
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // 유통기한 인디케이터
+                    ExpiryIndicatorBar(fridgeItems: _allFridgeItems),
+
+                    const SizedBox(height: 16),
+
+                    // 메인 콘텐츠
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      child: Column(
+                        children: [
+                          // 냉장고 타임라인
+                          Card(
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        '냉장고 타임라인',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (_loadingFridge)
+                                        const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  FridgeTimeline(
+                                    userName: name,
+                                    fridgeItems: _filteredFridgeItems,
+                                    currentFilter: _timeFilter,
+                                    onFilterChanged: (f) =>
+                                        setState(() => _timeFilter = f),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // 추천 메뉴
+                          _loadingMenus
+                              ? const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 24),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                )
+                              : MenuRecommendations(
+                                  // 이미 공용 규칙으로 정렬/필터를 끝낸 결과(상위 10개)를 그대로 넘김
+                                  menuRecommendations: _menus,
+                                  currentSortMode: _sortMode,
+                                  onSortModeChanged: _onSortModeChanged,
+                                  onMenuTapped: _onMenuTapped,
+                                  onFavoriteToggled: (menu) {
+                                    setState(() {
+                                      final idx = _menus.indexOf(menu);
+                                      if (idx >= 0) {
+                                        _menus[idx] = _menus[idx].copyWith(
+                                          favorite: !menu.favorite,
+                                        );
+                                      }
+                                    });
+                                  },
+                                ),
+
+                          const SizedBox(height: 8),
+
+                          // 하단 퀵액션 (제네릭 명시로 타입 추론 오류 제거)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: PopupMenuButton<void>(
+                              tooltip: 'Quick actions',
+                              itemBuilder: (context) =>
+                                  <PopupMenuEntry<void>>[
+                                PopupMenuItem<void>(
+                                  child: const ListTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor:
+                                          Color.fromARGB(255, 30, 0, 255),
+                                      child:
+                                          Icon(Icons.add, color: Colors.white),
+                                    ),
+                                    title: Text('Add Item'),
+                                    subtitle: Text('냉장고에 새 아이템 추가'),
+                                  ),
+                                  onTap: () async {
+                                    // 메뉴가 닫힌 뒤 실행되도록 프레임 지연
+                                    await Future.delayed(Duration.zero);
+                                    await _onAddItem();
+                                  },
+                                ),
+                                const PopupMenuDivider(height: 6),
+                                PopupMenuItem<void>(
+                                  child: const ListTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor:
+                                          Color.fromARGB(255, 30, 0, 255),
+                                      child: Icon(Icons.camera_alt,
+                                          color: Colors.white),
+                                    ),
+                                    title: Text('Scan Receipt'),
+                                    subtitle: Text('영수증 스캔으로 한 번에 추가'),
+                                  ),
+                                  onTap: () async {
+                                    // TODO: 영수증 스캔 기능 연결
+                                  },
+                                ),
+                              ],
+                              child: const Chip(
+                                avatar: Icon(Icons.flash_on, size: 18),
+                                label: Text('Quick Actions'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              title: const Text('Add Item'),
-              subtitle: const Text('냉장고에 새 아이템 추가'),
-              onTap: () async {
-                Navigator.pop(context);
-                final newItem = await AddItemDialog.show(context);
-                if (newItem != null) {
-                  try {
-                    await _mockRepo.addFridgeItem(newItem);
-                    _showSnack(
-                      '${newItem.name}이(가) 추가되었습니다',
-                      const Color.fromARGB(255, 30, 0, 255),
-                    );
-                  } catch (_) {
-                    _showSnack('아이템 추가에 실패했습니다', Colors.red);
-                  }
-                }
-              },
             ),
-
-            // Scan Receipt
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color.fromARGB(255, 30, 0, 255),
-                child: Icon(Icons.camera_alt, color: Colors.white),
-              ),
-              title: const Text('Scan Receipt'),
-              subtitle: const Text('영수증 스캔으로 한 번에 추가'),
-              onTap: () {
-                Navigator.pop(context);
-                _showSnack('영수증 스캔 기능', const Color.fromARGB(255, 30, 0, 255));
-              },
-            ),
-
-            const SizedBox(height: 20),
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _loadHomeData,
+        label: const Text('추천 새로고침'),
+        icon: const Icon(Icons.refresh),
+      ),
     );
   }
 
-  // ===== 스낵바 =====
-  void _clearAllSnackBars() {
-    if (mounted) ScaffoldMessenger.of(context).clearSnackBars();
-  }
-
+  // ==============================
+  // 공용 스낵바
+  // ==============================
   void _showSnack(String msg, Color c, {int ms = 1500}) {
     _clearAllSnackBars();
     if (!mounted) return;
@@ -391,5 +453,10 @@ class _HomePageState extends State<HomePage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
+  }
+
+  void _clearAllSnackBars() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
   }
 }
