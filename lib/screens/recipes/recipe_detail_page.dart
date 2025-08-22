@@ -37,7 +37,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
 
     _repository = RecipeRepository(
       api: RecipeApi(
-        base: 'http://openapi.foodsafetykorea.go.kr',
+        base: 'https://openapi.foodsafetykorea.go.kr',
         keyId: (defineKey.isNotEmpty ? defineKey : hardKey),
         serviceId: 'COOKRCP01',
       ),

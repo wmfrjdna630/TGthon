@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../models/menu_rec.dart';
-import '../../screens/home/home_page.dart'; // SortMode enum 사용
+import '../../screens/home/home_types.dart'; // SortMode enum 사용
 
 /// 홈페이지의 메뉴 추천 섹션 위젯
 class MenuRecommendations extends StatelessWidget {

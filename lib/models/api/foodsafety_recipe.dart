@@ -45,16 +45,92 @@ class FoodSafetyRecipeDto {
     );
   }
 
-  /// 문자열 재료를 토큰화
+  static final Set<String> _unitTokens = {
+    // 영문 단위
+    'g', 'kg', 'mg', 'lb', 'lbs', 'oz',
+    'l', 'ml', 'cc',
+    'tsp', 'tbsp', 'cup', 'cups',
+    // 한글 단위
+    '큰술', '작은술', '숟가락', '스푼', '스푼들', '컵', '종이컵',
+    '개', '알', '줌', '꼬집', '쪽', '줄기', '톨', '마리', '번',
+    // 빈도/횟수·범위 표현
+    '분', '시간',
+  };
+
+  static final Set<String> _stopWords = {
+    // 양/수량 표현
+    '약간', '조금', '적당량', '넉넉히', '소량', '중간', '큰', '작은', '적당히',
+    // 조리 상태/수식
+    '다진', '간', '채', '채썬', '썬', '잘게', '굵게', '볶은', '삶은', '데친', '구운',
+    '간한', '간을', '간하여', '간해', '간맞춰',
+    // 접속/조사
+    '및', '또는', '또', '그리고', '와', '과', '또한',
+    '의', '을', '를', '이', '가', '은', '는', '에', '로', '에서', '과의',
+    // 기타 자주 섞이는 불용어
+    '국물', '물', '육수', // 필요시 물/육수는 남기고 싶다면 여기서 빼세요
+  };
+
+  /// 문자열 재료를 토큰화 (단위/숫자/불용어 필터링 + 한글/영문 식재료만 남김)
   static List<String> tokenizeParts(String? parts) {
     if (parts == null || parts.trim().isEmpty) return const [];
-    final raw = parts
-        .toLowerCase()
-        .replaceAll(RegExp(r'[\(\)\[\]\{\}]'), ' ')
-        .replaceAll(RegExp(r'[\d\.]+'), ' ')
-        .replaceAll(RegExp(r'[^0-9a-zA-Z가-힣,./·∙•\s]'), ' ');
-    final split = raw.split(RegExp(r'[,/·∙•\s]+'));
-    return split.map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+
+    String s = parts.toLowerCase();
+
+    // 1) 괄호 내용 제거 (대안 단위/설명 등)
+    s = s.replaceAll(RegExp(r'[\(\)\[\]\{\}]'), ' ');
+
+    // 2) 분수/범위/숫자+단위 제거 (예: 2/3개, 1-2컵, 100g, 200ml)
+    //    - 먼저 숫자+단위 패턴 제거
+    s = s.replaceAll(
+      RegExp(
+        r'\b\d+[./-]?\d*\s*(g|kg|mg|lb|lbs|oz|l|ml|cc|tsp|tbsp|cup|cups|큰술|작은술|숟가락|스푼|스푼들|컵|종이컵|개|알|줌|꼬집|쪽|줄기|톨|마리|분|시간)\b',
+      ),
+      ' ',
+    );
+    //    - “1~2”, “1-2” 같은 범위 숫자 제거
+    s = s.replaceAll(RegExp(r'\b\d+\s*[\-~]\s*\d+\b'), ' ');
+    //    - 나머지 숫자 제거 (순서 중요: 위에서 숫자+단위를 먼저 처리)
+    s = s.replaceAll(RegExp(r'\b\d+[./]?\d*\b'), ' ');
+
+    // 3) 구분자 통일 (쉼표, 슬래시, 중점, bullet, 콜론 등)
+    s = s.replaceAll(RegExp(r'[^0-9a-zA-Z가-힣,./·∙•:\s-]'), ' ');
+    final rawTokens = s.split(RegExp(r'[,/·∙•:\s]+'));
+
+    // 4) 토큰 정리: 단위/불용어/한 글자 알파벳 제거, 접미 단위 제거
+    final List<String> cleaned = [];
+    for (var t in rawTokens) {
+      t = t.trim();
+      if (t.isEmpty) continue;
+
+      // 영문 한 글자 토큰 제거 (수량 파편)
+      if (RegExp(r'^[a-zA-Z]$').hasMatch(t)) continue;
+
+      // 순수 단위 토큰 걸러내기
+      if (_unitTokens.contains(t)) continue;
+
+      // 접미 단위가 붙은 경우(숫자를 지운 뒤 남은 ‘g’, ‘ml’ 등) 잘라내기
+      // 예: '소금g' 같은 비정상 경우 대비
+      final m = RegExp(
+        r'^(.*?)(g|kg|mg|lb|lbs|oz|l|ml|cc|tsp|tbsp|cup|cups|큰술|작은술|숟가락|스푼|스푼들|컵|종이컵|개|알|줌|꼬집|쪽|줄기|톨|마리)$',
+      ).firstMatch(t);
+      if (m != null) {
+        t = m.group(1)!.trim();
+        if (t.isEmpty) continue;
+      }
+
+      // 불용어 제거
+      if (_stopWords.contains(t)) continue;
+
+      // 너무 짧은 파편 제거 (한글 한 글자/기호 방지) — '파' 같은 재료를 쓰신다면 이 규칙은 빼세요.
+      // if (t.length <= 1 && RegExp(r'^[가-힣]$').hasMatch(t)) continue;
+
+      cleaned.add(t);
+    }
+
+    // 5) 중복 제거(재료 수는 '고유 재료' 기준이 더 자연스러움)
+    final unique = cleaned.toSet().toList();
+
+    return unique;
   }
 
   /// 우리 앱의 UnifiedRecipe로 변환

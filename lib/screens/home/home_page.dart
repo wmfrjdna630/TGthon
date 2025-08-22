@@ -1,6 +1,19 @@
 // lib/screens/home/home_page.dart
 import 'package:flutter/material.dart';
 
+// ==== 모델/헬퍼 ====
+import '../../models/recipe.dart';
+import '../../models/unified_recipe.dart';
+import '../../models/menu_rec.dart';
+import '../../models/fridge_item.dart';
+import '../../services/recipe_sort_helper.dart';
+
+// ==== 저장소/API ====
+import '../../data/recipe_repository.dart';
+import '../../data/remote/recipe_api.dart';
+import '../../data/sample_data.dart';
+import '../../data/mock_repository.dart'; // Add Item 등 로컬 목 동작에 사용
+
 // ==== UI 위젯들 ====
 import '../../widgets/home/expiry_indicator_bar.dart';
 import '../../widgets/home/dynamic_header.dart';
@@ -9,15 +22,7 @@ import '../../widgets/home/menu_recommendations.dart';
 import '../../widgets/common/add_item_dialog.dart';
 
 // ==== 화면 이동 ====
-import '../../screens/recipes/recipe_detail_page.dart'; // 🔥 새로 추가
-
-// ==== 데이터/모델 ====
-import '../../data/sample_data.dart';
-import '../../data/remote/recipe_api.dart';
-import '../../data/recipe_repository.dart';
-import '../../data/mock_repository.dart'; // Add Item 등 로컬 목 동작에 사용
-import '../../models/fridge_item.dart';
-import '../../models/menu_rec.dart';
+import '../../screens/recipes/recipe_detail_page.dart';
 
 // ==== 공용 타입(enum) ====
 import 'home_types.dart';
@@ -43,8 +48,13 @@ class _HomePageState extends State<HomePage> {
   SortMode _sortMode = SortMode.expiry;
   TimeFilter _timeFilter = TimeFilter.month;
 
+  /// 화면에 표시되는 메뉴(이미 정렬/필터 적용된 최종 결과)
   List<MenuRec> _menus = [];
   bool _loadingMenus = true;
+
+  /// 전체 모수(정렬 전 원본) + Recipe 인덱스(타이틀 매핑)
+  List<MenuRec> _allMenus = [];
+  Map<String, Recipe> _recipeByTitle = {};
 
   // 냉장고/타임라인은 샘플 데이터 사용(기존 동작 유지)
   List<FridgeItem> get _allFridgeItems => SampleData.timelineItems;
@@ -74,13 +84,13 @@ class _HomePageState extends State<HomePage> {
 
     _recipeRepo = RecipeRepository(
       api: RecipeApi(
-        base: 'http://openapi.foodsafetykorea.go.kr',
+        base: 'https://openapi.foodsafetykorea.go.kr',
         keyId: (defineKey.isNotEmpty ? defineKey : hardKey),
         serviceId: 'COOKRCP01',
       ),
     );
 
-    _loadMenus(); // 최초 로드
+    _loadHomeData(); // 최초 로드 (전체 모수 확보 → 공용 헬퍼 정렬)
   }
 
   @override
@@ -91,93 +101,105 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // ===== 데이터 로드 =====
-  Future<void> _loadMenus() async {
+  // ===== 데이터 로드(전체 모수 확보) =====
+  /// 레시피 페이지와 동일한 "충분한 모수"를 홈에서도 확보하고,
+  /// 공용 정렬 규칙(RecipeSortHelper)으로 화면용 목록을 만든다.
+  Future<void> _loadHomeData() async {
     try {
       setState(() => _loadingMenus = true);
 
-      final keyword = _searchController.text.trim();
-      final menus = await _recipeRepo.searchMenus(
-        keyword: keyword.isEmpty ? null : keyword, // RCP_NM
-        dishType: null, // 홈은 전체
-        include: null, // 필요시 대표 재료(예: '계란')로 1차 필터 가능
-        page: 1,
-        pageSize: 20,
+      final keyword = _searchController.text.trim().isEmpty
+          ? null
+          : _searchController.text.trim();
+
+      // ---- 1) 메뉴 전체 수집 (간단 페이지 루프) ----
+      //  - Repository에 통합 fetch가 없다면 searchMenus를 페이징 호출
+      //  - API 제한/속도에 맞춰 pageSize, maxPages는 필요 시 조정
+      const int pageSize = 100;
+      const int maxPages = 50;
+
+      final List<MenuRec> gathered = [];
+      for (int page = 1; page <= maxPages; page++) {
+        final chunk = await _recipeRepo.searchMenus(
+          keyword: keyword, // RCP_NM
+          dishType: null, // 전체
+          include: null,
+          page: page,
+          pageSize: pageSize,
+        );
+        if (chunk.isEmpty) break;
+        gathered.addAll(chunk);
+
+        // 안전장치: 너무 많을 때 중단(필요 시 상한 조정)
+        if (gathered.length >= 20000) break;
+      }
+
+      // ---- 2) Recipe 인덱스 구성 (타이틀 매핑) ----
+      //  - 홈에서도 레시피 페이지의 ingredientsHave/Total 기준을 사용하도록,
+      //    보유 메뉴(MenuRec)를 Recipe로 변환하여 인덱스 구축
+      //  - title 정규화 키로 매핑
+      final List<Recipe> recipeList = gathered
+          .map((m) => m.toRecipe())
+          .toList();
+      final recipeIndex = RecipeSortHelper.buildRecipeIndex(recipeList);
+
+      // ---- 3) 공용 정렬 규칙으로 화면용 목록 산출 ----
+      final visible = RecipeSortHelper.sortAndFilterMenus(
+        menus: gathered,
+        recipeByTitle: recipeIndex,
+        mode: _sortMode,
+        expiryThresholdDays: 7,
       );
 
       if (!mounted) return;
       setState(() {
-        _menus = _applySort(menus, _sortMode);
+        _allMenus = gathered;
+        _recipeByTitle = recipeIndex;
+        _menus = visible;
         _loadingMenus = false;
       });
-    } catch (_) {
-      // 실패 시 샘플 폴백
+    } catch (e) {
+      // 실패 시 샘플 폴백 (이전 동작 유지)
       if (!mounted) return;
+      _showSnack('레시피 API 호출 실패. 샘플 데이터로 표시합니다.', Colors.orange);
+
+      // 샘플로도 동일 정렬 규칙 적용
+      final sample = SampleData.menuRecommendations;
+      final sampleRecipes = sample.map((m) => m.toRecipe()).toList();
+      final sampleIndex = RecipeSortHelper.buildRecipeIndex(sampleRecipes);
+      final visible = RecipeSortHelper.sortAndFilterMenus(
+        menus: sample,
+        recipeByTitle: sampleIndex,
+        mode: _sortMode,
+        expiryThresholdDays: 7,
+      );
+
       setState(() {
-        _menus = _applySort(SampleData.menuRecommendations, _sortMode);
+        _allMenus = sample;
+        _recipeByTitle = sampleIndex;
+        _menus = visible;
         _loadingMenus = false;
       });
-      _showSnack('레시피 API 호출 실패. 샘플 데이터로 표시합니다.', Colors.orange);
     }
   }
 
-  // ===== 정렬 =====
-  List<MenuRec> _applySort(List<MenuRec> src, SortMode mode) {
-    final owned = _allFridgeItems
-        .map((e) => e.name.trim().toLowerCase())
-        .toSet();
+  /// 정렬 모드 변경 시, 공용 규칙으로 다시 계산
+  void _onSortModeChanged(SortMode mode) {
+    setState(() => _sortMode = mode);
 
-    var list = List<MenuRec>.from(src);
-    switch (mode) {
-      case SortMode.expiry:
-        list.sort((a, b) => a.minDaysLeft.compareTo(b.minDaysLeft));
-        break;
+    final visible = RecipeSortHelper.sortAndFilterMenus(
+      menus: _allMenus,
+      recipeByTitle: _recipeByTitle,
+      mode: _sortMode,
+      expiryThresholdDays: 7,
+    );
 
-      case SortMode.frequency:
-        int missing(MenuRec m) => _missingRequiredCount(m, owned);
-        list = list.where((m) => missing(m) < 3).toList()
-          ..sort((a, b) {
-            final am = missing(a), bm = missing(b);
-            if (am != bm) return am.compareTo(bm);
-            final ex = a.minDaysLeft.compareTo(b.minDaysLeft);
-            if (ex != 0) return ex;
-            if (a.favorite != b.favorite) {
-              return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
-            }
-            return a.title.compareTo(b.title);
-          });
-        break;
-
-      case SortMode.favorite:
-        list.sort((a, b) {
-          if (a.favorite == b.favorite) return a.title.compareTo(b.title);
-          return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
-        });
-        break;
-    }
-    return list;
+    setState(() {
+      _menus = visible;
+    });
   }
 
-  // 홈/레시피 공통 "부족 개수" 계산기
-  int _missingRequiredCount(MenuRec menu, Set<String> owned) {
-    if (menu.hasAllRequired) return 0;
-    final msg = (menu.needMessage).trim();
-    if (msg.isEmpty) return 999;
-    final parts = msg
-        .toLowerCase()
-        .replaceAll('!', ' ')
-        .replaceAll('요.', ' ')
-        .split(RegExp(r'[,\u00B7\u2022/·∙•]| 그리고 | 및 | 와 | 과 | 혹은 | 또는 '));
-    final tokens = parts
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .where((s) => s.runes.length >= 1 && s.runes.length <= 12)
-        .toSet()
-        .toList();
-    return tokens.length;
-  }
-
-  // ===== 🔥 새로 추가: 메뉴 클릭 처리 =====
+  // ===== 메뉴 카드 탭 처리 =====
   /// 메뉴 추천 카드를 클릭했을 때의 처리
   /// 1. 클릭 카운트 증가 (사용 빈도 반영)
   /// 2. Recipe 객체로 변환 후 상세 페이지로 이동
@@ -191,7 +213,7 @@ class _HomePageState extends State<HomePage> {
         }
       });
 
-      // 2. MenuRec을 Recipe로 변환
+      // 2. MenuRec → Recipe 변환
       final recipe = menu.toRecipe();
 
       // 3. 레시피 상세 페이지로 이동
@@ -205,8 +227,8 @@ class _HomePageState extends State<HomePage> {
       // 4. 성공 피드백 (선택사항)
       _showSnack('${menu.title} 레시피 보기', const Color.fromARGB(255, 30, 0, 255));
     } catch (e) {
-      // 에러 처리: 변환 실패 시 폴백
       _showSnack('레시피 정보를 불러올 수 없습니다.', Colors.red);
+      // ignore: avoid_print
       print('MenuRec to Recipe 변환 실패: $e');
     }
   }
@@ -266,14 +288,10 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               )
                             : MenuRecommendations(
-                                menuRecommendations: _applySort(
-                                  _menus,
-                                  _sortMode,
-                                ),
+                                // ✅ 이미 공용 규칙으로 정렬/필터를 끝낸 결과를 그대로 넘김
+                                menuRecommendations: _menus,
                                 currentSortMode: _sortMode,
-                                onSortModeChanged: (m) =>
-                                    setState(() => _sortMode = m),
-                                // 🔥 수정: 메뉴 클릭 시 상세 페이지로 이동
+                                onSortModeChanged: _onSortModeChanged,
                                 onMenuTapped: _onMenuTapped,
                                 onFavoriteToggled: (menu) {
                                   setState(() {
