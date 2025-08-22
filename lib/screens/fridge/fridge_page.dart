@@ -1,5 +1,6 @@
 // lib/screens/fridge/fridge_page.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/common/blue_header.dart';
 import '../../widgets/fridge/fridge_filter_bar.dart';
@@ -8,7 +9,7 @@ import '../../data/remote/fridge_repository.dart';
 import '../../models/fridge_item.dart';
 import '../../widgets/common/add_item_dialog.dart';
 import '../../widgets/common/compact_search_bar.dart';
-import '../../widgets/common/edit_item_dialog.dart'; // [추가]
+import '../../widgets/common/edit_item_dialog.dart';
 
 class FridgePage extends StatefulWidget {
   const FridgePage({super.key});
@@ -26,12 +27,14 @@ class _FridgePageState extends State<FridgePage> {
   List<FridgeItem> _allItems = [];
   bool _isLoading = true;
 
+  StreamSubscription<List<FridgeItem>>? _sub; // ← 실시간 구독용
+
   Map<String, int> get _filterCounts => {
-    'All': _allItems.length,
-    'Fridge': _allItems.where((item) => item.location == 'Fridge').length,
-    'Freezer': _allItems.where((item) => item.location == 'Freezer').length,
-    'Pantry': _allItems.where((item) => item.location == 'Pantry').length,
-  };
+        'All': _allItems.length,
+        'Fridge': _allItems.where((item) => item.location == 'Fridge').length,
+        'Freezer': _allItems.where((item) => item.location == 'Freezer').length,
+        'Pantry': _allItems.where((item) => item.location == 'Pantry').length,
+      };
 
   List<FridgeItem> get _filteredItems {
     List<FridgeItem> items = _allItems;
@@ -51,12 +54,29 @@ class _FridgePageState extends State<FridgePage> {
   @override
   void initState() {
     super.initState();
-    _loadFridgeItems();
     _searchController.addListener(_onSearchChanged);
+
+    // 최초 1회 로드
+    _loadFridgeItems();
+
+    // 🔴 핵심: 실시간 구독. 홈/다른 화면에서 변경되면 즉시 반영.
+    _sub = _repository.watchFridgeItems().listen((items) {
+      if (!mounted) return;
+      setState(() {
+        _allItems = items;
+        _isLoading = false;
+      });
+    }, onError: (e) {
+      if (!mounted) return;
+      _isLoading = false;
+      _showErrorSnackBar('실시간 연동 오류: $e');
+      setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _sub?.cancel();
     _clearAllSnackBars();
     _searchController.dispose();
     _focusNode.dispose();
@@ -66,17 +86,15 @@ class _FridgePageState extends State<FridgePage> {
   Future<void> _loadFridgeItems() async {
     try {
       final items = await _repository.getFridgeItems();
-      if (mounted) {
-        setState(() {
-          _allItems = items;
-          _isLoading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _allItems = items;
+        _isLoading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showErrorSnackBar('불러오기 실패: $e');
-      }
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showErrorSnackBar('불러오기 실패: $e');
     }
   }
 
@@ -148,8 +166,8 @@ class _FridgePageState extends State<FridgePage> {
             return FridgeItemCard(
               item: item,
               onTap: () => _onItemTapped(item),
-              onEdit: () => _onItemEdit(item), // [구현]
-              onDelete: () => _onItemDelete(item), // [구현]
+              onEdit: () => _onItemEdit(item),
+              onDelete: () => _onItemDelete(item),
             );
           },
         ),
@@ -213,7 +231,7 @@ class _FridgePageState extends State<FridgePage> {
     if (newItem != null) {
       try {
         await _repository.addFridgeItem(newItem);
-        await _loadFridgeItems();
+        // 스트림 구독 중이므로 수동 새로고침 없이 자동 반영
         _showSuccessSnackBar('${newItem.name}이(가) 추가되었습니다');
       } catch (e) {
         _showErrorSnackBar('추가 실패: $e');
@@ -225,15 +243,13 @@ class _FridgePageState extends State<FridgePage> {
     _showInfoSnackBar('${item.name} 상세보기');
   }
 
-  /// [변경] 실제 수정 로직 구현: 다이얼로그 → 저장 → 새로고침
   Future<void> _onItemEdit(FridgeItem item) async {
     final updated = await EditItemDialog.show(context, item);
     if (updated == null) return;
 
     try {
-      // 기존 시그니처 호환: (name, updatedItem)
-      await _repository.updateFridgeItem(item.name, updated);
-      await _loadFridgeItems();
+      await _repository.updateFridgeItemObject(updated);
+      // 스트림 구독 중이므로 자동 반영
       _showSuccessSnackBar('${item.name}이(가) 수정되었습니다');
     } catch (e) {
       _showErrorSnackBar('수정 실패: $e');
@@ -271,13 +287,8 @@ class _FridgePageState extends State<FridgePage> {
 
   Future<void> _deleteItem(FridgeItem item) async {
     try {
-      // 기본: 이름으로 삭제(기존 시그니처 유지)
       await _repository.deleteFridgeItem(item.name);
-
-      // 만약 동명이인/중복우려가 있으면 아래로 교체 가능:
-      // await _repository.deleteFridgeItemByKey(item.name, item.location);
-
-      await _loadFridgeItems();
+      // 스트림 구독 중이므로 자동 반영
       _showSuccessSnackBar('${item.name}이(가) 삭제되었습니다');
     } catch (e) {
       _showErrorSnackBar('삭제 실패: $e');
@@ -308,19 +319,19 @@ class _FridgePageState extends State<FridgePage> {
   }
 
   void _showSuccessSnackBar(String message) => _showSnackBar(
-    message: message,
-    backgroundColor: const Color.fromARGB(255, 30, 0, 255),
-    duration: const Duration(milliseconds: 1200),
-  );
+        message: message,
+        backgroundColor: const Color.fromARGB(255, 30, 0, 255),
+        duration: const Duration(milliseconds: 1200),
+      );
 
   void _showErrorSnackBar(String message) => _showSnackBar(
-    message: message,
-    backgroundColor: Colors.red,
-    duration: const Duration(milliseconds: 2000),
-  );
+        message: message,
+        backgroundColor: Colors.red,
+        duration: const Duration(milliseconds: 2000),
+      );
 
   void _showInfoSnackBar(String message) => _showSnackBar(
-    message: message,
-    backgroundColor: const Color.fromARGB(255, 30, 0, 255),
-  );
+        message: message,
+        backgroundColor: const Color.fromARGB(255, 30, 0, 255),
+      );
 }
