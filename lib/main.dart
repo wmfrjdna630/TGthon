@@ -1,8 +1,9 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'app.dart';
 
@@ -10,22 +11,19 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 1) Firebase 초기화
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // 2) (웹만) 인증 세션을 새로고침 후에도 유지
   if (kIsWeb) {
     try {
       await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
     } catch (_) {
-      // 웹 이외 플랫폼에서는 무시
+      await FirebaseAuth.instance.setPersistence(Persistence.SESSION);
     }
   }
-
-  // 3) 익명 로그인 확정 (성공할 때까지 시도)
-  await _ensureAnonymousSignIn();
-
+  final auth = FirebaseAuth.instance;
+  if (auth.currentUser == null) {
+    await auth.signInAnonymously();
+  }
   // 4) 앱 시작
   runApp(const App());
 }
