@@ -61,6 +61,26 @@ class FridgeRemoteRepository {
       });
     }
   }
+     /// (3) 이름 변경을 포함한 업데이트 (oldName 기준 문서 탐색)
+  Future<void> updateFridgeItemByOldName({
+    required String oldName,
+    required FridgeItem updated,
+  }) async {
+    final q = await _col.where('name', isEqualTo: oldName).limit(1).get();
+    if (q.docs.isEmpty) return;
+    final now = DateTime.now();
+    final expiryDate = now.add(Duration(days: updated.daysLeft));
+    final ref = q.docs.first.reference;
+    await ref.update({
+      'name': updated.name,                // ← 새 이름으로 실제 문서 갱신
+      'amount': updated.amount,
+      'category': updated.category,
+      'location': updated.location,
+      'totalDays': updated.totalDays, 'expiryDate': Timestamp.fromDate(expiryDate),
+      'key': '${updated.name}|${updated.location}', // 기존 key 규칙도 갱신
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
 
   /// (2) 객체 기반 업데이트 (기존 호출과 호환)
   Future<void> updateFridgeItemObject(FridgeItem item) async {
