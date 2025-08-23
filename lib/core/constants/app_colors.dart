@@ -1,3 +1,5 @@
+// lib/core/constants/app_colors.dart
+
 import 'package:flutter/material.dart';
 
 /// 앱 전체에서 사용하는 색상 상수들
@@ -126,17 +128,17 @@ class AppColors {
   /// 1주 필터용 그라데이션 (빨간색만)
   static const List<Color> timelineGradientWeek = [
     danger, // 빨간색
-    danger, // 빨간색
+    danger, // 빨간색 (동일한 색상으로 단색 효과)
   ];
 
   /// 1개월 필터용 그라데이션 (빨간색 -> 주황색)
   static const List<Color> timelineGradientMonth = [
     danger, // 빨간색 (7일 이하)
-    warning, // 주황색 (8-29일)
+    warning, // 주황색 (8-28일)
   ];
 
-  /// 전체 필터용 그라데이션 (빨간색 -> 주황색 -> 초록색)
-  static const List<Color> timelineGradientAll = [
+  /// 3개월 필터용 그라데이션 (빨간색 -> 주황색 -> 초록색)
+  static const List<Color> timelineGradientThird = [
     danger, // 빨간색 (7일 이하)
     warning, // 주황색 (8-29일)
     success, // 초록색 (30일 이상)
@@ -162,7 +164,7 @@ class AppColors {
 
   // ========== 유틸리티 메서드들 ==========
 
-  /// ✅ 수정된 유통기한 일수에 따른 색상 반환
+  /// 유통기한 일수에 따른 색상 반환
   /// 7일 이하: 빨간색, 8-29일: 주황색, 30일 이상: 초록색
   static Color getColorByDaysLeft(int daysLeft) {
     if (daysLeft <= 7) return danger; // 7일 이하: 빨간색
@@ -170,31 +172,38 @@ class AppColors {
     return success; // 30일 이상: 초록색
   }
 
-  /// 필터 타입에 따른 그라데이션 색상 반환 (전체를 1년으로 수정)
+  /// 필터 타입에 따른 그라데이션 색상 반환
   static List<Color> getTimelineGradient(String filterType) {
     switch (filterType) {
       case '1주':
         return timelineGradientWeek;
       case '1개월':
         return timelineGradientMonth;
-      case '1년': // 전체를 1년으로 변경
-        return timelineGradientAll;
+      case '3개월':
+        return timelineGradientThird;
       default:
-        return timelineGradientAll;
+        return timelineGradientThird;
     }
   }
 
-  /// ✅ 수정된 필터 타입에 따른 그라데이션 stop 포인트 반환
+  /// 필터 타입에 따른 그라데이션 stop 포인트 반환
+  /// 🔴 중요: stops 배열의 길이는 colors 배열의 길이와 반드시 일치해야 함
   static List<double> getTimelineGradientStops(String filterType) {
     switch (filterType) {
       case '1주':
-        return [0.0, 1.0]; // 빨간색만
+        // 2개 색상에 2개 stops (빨간색만 표시)
+        return [0.0, 1.0];
       case '1개월':
-        return [0.0, 0.25, 1.0]; // 빨간색(7일) -> 주황색(30일)
-      case '1년': // 전체를 1년으로 변경
-        return [0.0, 0.08, 1.0]; // 빨간색(7일) -> 주황색(30일) -> 초록색(365일)
+        // 2개 색상에 2개 stops
+        // 7일/28일 = 0.25 (빨간색이 전체의 25%)
+        return [0.0, 0.25];
+      case '3개월':
+        // 3개 색상에 3개 stops
+        // 7일/90일 = 0.08 (빨간색이 전체의 8%)
+        // 30일/90일 = 0.33 (주황색이 전체의 33%까지)
+        return [0.0, 0.08, 0.33];
       default:
-        return [0.0, 0.08, 1.0];
+        return [0.0, 0.08, 0.33];
     }
   }
 

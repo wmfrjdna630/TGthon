@@ -63,6 +63,7 @@ class _HomePageState extends State<HomePage> {
   RecipeRanker? _ranker;
 
   // ===== 필터/유틸 =====
+  /// 현재 선택된 시간 필터에 따른 최대 일수 반환
   int get _maxDaysForFilter {
     switch (_timeFilter) {
       case TimeFilter.week:
@@ -74,6 +75,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 시간 필터에 따라 필터링된 냉장고 아이템 목록
   List<FridgeItem> get _filteredFridgeItems =>
       _fridgeItems.where((it) => it.daysLeft <= _maxDaysForFilter).toList();
 
@@ -100,28 +102,58 @@ class _HomePageState extends State<HomePage> {
     _loadHomeData();
   }
 
+  /// 냉장고 데이터 초기화 및 실시간 구독 설정
+  /// Firestore에서 냉장고 데이터를 가져오고 실시간 변경사항을 구독
   Future<void> _initFridge() async {
     setState(() => _loadingFridge = true);
     try {
-      // 초기값
+      // 초기값 로드
       final items = await _fridgeRepo.getFridgeItems();
       if (!mounted) return;
+
+      // 🔴 중요: 초기 데이터 설정 시 setState로 UI 업데이트
       setState(() {
         _fridgeItems = items;
         _loadingFridge = false;
       });
 
-      // 🔴 Firestore 실시간 구독
+      // 🔴 핵심: Firestore 실시간 구독 설정
+      // 냉장고 페이지나 다른 곳에서 수정/추가/삭제 시 자동으로 반영됨
       _fridgeSub?.cancel();
-      _fridgeSub = _fridgeRepo.watchFridgeItems().listen((items) {
-        if (!mounted) return;
-        setState(() => _fridgeItems = items);
-        // 냉장고 변화 → 추천 재랭킹
-        _rankAndSet();
-      }, onError: (e) {
-        if (!mounted) return;
-        _showSnack('냉장고 실시간 연동 오류: $e', Colors.red);
-      });
+      _fridgeSub = _fridgeRepo.watchFridgeItems().listen(
+        (items) {
+          if (!mounted) return;
+
+          // 🔴 핵심: 냉장고 데이터 변경 시 즉시 UI 업데이트
+          // ExpiryIndicatorBar, FridgeTimeline, DynamicHeader 모두 자동 갱신
+          setState(() {
+            _fridgeItems = items;
+
+            // 디버깅용 로그 (필요시 제거)
+            print('🔄 냉장고 데이터 실시간 업데이트: ${items.length}개 아이템');
+
+            // 각 카테고리별 개수 계산 (디버깅용)
+            final dangerCount = items
+                .where((item) => item.daysLeft <= 7)
+                .length;
+            final warningCount = items
+                .where((item) => item.daysLeft > 7 && item.daysLeft < 30)
+                .length;
+            final safeCount = items.where((item) => item.daysLeft >= 30).length;
+            print(
+              '📊 유통기한 상태 - 위험: $dangerCount, 주의: $warningCount, 안전: $safeCount',
+            );
+          });
+
+          // 냉장고 변화에 따른 추천 메뉴 재랭킹
+          _rankAndSet();
+        },
+        onError: (e) {
+          if (!mounted) return;
+          print('❌ 냉장고 실시간 연동 오류: $e');
+          _showSnack('냉장고 실시간 연동 오류: $e', Colors.red);
+        },
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _loadingFridge = false);
@@ -131,6 +163,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    // 구독 해제
     _fridgeSub?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
@@ -138,6 +171,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ===== 레시피 로드 & 랭킹 =====
+  /// 홈 화면의 레시피/메뉴 데이터 로드
   Future<void> _loadHomeData() async {
     try {
       setState(() => _loadingMenus = true);
@@ -146,7 +180,7 @@ class _HomePageState extends State<HomePage> {
           ? null
           : _searchController.text.trim();
 
-      // 1) 메뉴 수집
+      // 1) 메뉴 수집 (API에서 여러 페이지 수집)
       const int pageSize = 100;
       const int maxPages = 50;
 
@@ -164,7 +198,7 @@ class _HomePageState extends State<HomePage> {
         if (gathered.length >= 20000) break; // 안전 상한
       }
 
-      // 2) Recipe 인덱스
+      // 2) Recipe 인덱스 생성
       final recipeIndex = <String, Recipe>{};
       for (final m in gathered) {
         final r = m.toRecipe();
@@ -196,31 +230,36 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // 냉장고가 바뀌었을 때 재랭킹만 수행 (API 재호출 없이)
+  /// 냉장고 데이터가 변경되었을 때 메뉴 추천 재랭킹
+  /// API 재호출 없이 기존 데이터로 재정렬만 수행
   void _rankAndSet() {
     if (_allMenus.isEmpty || _recipeByTitle.isEmpty) return;
 
+    // 변경된 냉장고 데이터로 랭커 재생성
     _ranker = RecipeRanker(
       fridgeItems: _fridgeItems,
       preferences: const ClickBasedPreference(),
     );
 
+    // 재랭킹 수행
     final ranked = _ranker!.sortByPriority(
       menus: _allMenus,
       recipeByTitle: _recipeByTitle,
     );
 
+    // UI 업데이트
     setState(() {
       _menus = ranked.take(10).toList();
     });
   }
 
+  /// 정렬 모드 변경 처리
   void _onSortModeChanged(SortMode mode) {
     setState(() => _sortMode = mode);
     // 필요시 보조 정렬 추가 가능(지금은 랭커 결과 유지)
   }
 
-  // 레시피 카드 탭 → 상세 화면(기존 시그니처 유지)
+  /// 메뉴 카드 탭 처리 - 레시피 상세 화면으로 이동
   Future<void> _onMenuTapped(MenuRec menu) async {
     try {
       // UI 즉시 반응: 클릭 카운트 증가
@@ -238,14 +277,13 @@ class _HomePageState extends State<HomePage> {
 
       // 클릭/즐겨찾기가 랭킹에 영향 → 재랭킹
       _rankAndSet();
-      _showSnack('${menu.title} 레시피 보기',
-          const Color.fromARGB(255, 30, 0, 255));
+      _showSnack('${menu.title} 레시피 보기', const Color.fromARGB(255, 30, 0, 255));
     } catch (e) {
       _showSnack('레시피 이동 오류: $e', Colors.red);
     }
   }
 
-  // 즐겨찾기 토글 (MenuRecommendations 시그니처 맞춤)
+  /// 즐겨찾기 토글 처리
   void _onFavoriteToggled(MenuRec menu) {
     setState(() {
       final idx = _menus.indexOf(menu);
@@ -262,7 +300,6 @@ class _HomePageState extends State<HomePage> {
     final name = widget.userName;
 
     return Scaffold(
-      
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.only(bottom: 24),
@@ -274,6 +311,7 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     const SizedBox(height: 16),
 
+                    // 🔴 핵심: DynamicHeader - _fridgeItems를 전달하여 실시간 반영
                     DynamicHeader(
                       fridgeItems: _fridgeItems,
                       menuRecommendations: _menus,
@@ -282,6 +320,8 @@ class _HomePageState extends State<HomePage> {
 
                     const SizedBox(height: 16),
 
+                    // 🔴 핵심: ExpiryIndicatorBar - _fridgeItems를 전달하여 실시간 반영
+                    // 냉장고 데이터가 변경될 때마다 자동으로 업데이트됨
                     ExpiryIndicatorBar(fridgeItems: _fridgeItems),
 
                     const SizedBox(height: 16),
@@ -290,7 +330,7 @@ class _HomePageState extends State<HomePage> {
                       padding: const EdgeInsets.symmetric(horizontal: 24.0),
                       child: Column(
                         children: [
-                          // 냉장고 타임라인
+                          // 냉장고 타임라인 카드
                           Card(
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -312,6 +352,7 @@ class _HomePageState extends State<HomePage> {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
+                                      // 로딩 인디케이터
                                       if (_loadingFridge)
                                         const SizedBox(
                                           width: 16,
@@ -323,6 +364,7 @@ class _HomePageState extends State<HomePage> {
                                     ],
                                   ),
                                   const SizedBox(height: 8),
+                                  // 🔴 핵심: FridgeTimeline - 필터링된 냉장고 아이템 전달
                                   FridgeTimeline(
                                     userName: name,
                                     fridgeItems: _filteredFridgeItems,
@@ -355,20 +397,25 @@ class _HomePageState extends State<HomePage> {
 
                           const SizedBox(height: 8),
 
-                          // 퀵 액션
+                          // 퀵 액션 메뉴
                           Align(
                             alignment: Alignment.centerRight,
                             child: PopupMenuButton<void>(
                               tooltip: 'Quick actions',
-                              itemBuilder: (context) =>
-                                  <PopupMenuEntry<void>>[
+                              itemBuilder: (context) => <PopupMenuEntry<void>>[
                                 PopupMenuItem<void>(
                                   child: const ListTile(
                                     leading: CircleAvatar(
-                                      backgroundColor:
-                                          Color.fromARGB(255, 30, 0, 255),
-                                      child:
-                                          Icon(Icons.add, color: Colors.white),
+                                      backgroundColor: Color.fromARGB(
+                                        255,
+                                        30,
+                                        0,
+                                        255,
+                                      ),
+                                      child: Icon(
+                                        Icons.add,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                     title: Text('Add Item'),
                                     subtitle: Text('냉장고에 새 아이템 추가'),
@@ -382,10 +429,16 @@ class _HomePageState extends State<HomePage> {
                                 PopupMenuItem<void>(
                                   child: const ListTile(
                                     leading: CircleAvatar(
-                                      backgroundColor:
-                                          Color.fromARGB(255, 30, 0, 255),
-                                      child: Icon(Icons.camera_alt,
-                                          color: Colors.white),
+                                      backgroundColor: Color.fromARGB(
+                                        255,
+                                        30,
+                                        0,
+                                        255,
+                                      ),
+                                      child: Icon(
+                                        Icons.camera_alt,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                     title: Text('Scan Receipt'),
                                     subtitle: Text('영수증 스캔으로 한 번에 추가'),
@@ -411,16 +464,18 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+      // 플로팅 액션 버튼 - 추천 새로고침
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _loadHomeData,
-        label: const Text('추천 새로고침', style: TextStyle(color: Colors.white),),
+        label: const Text('추천 새로고침', style: TextStyle(color: Colors.white)),
         icon: const Icon(Icons.refresh, color: Colors.white),
         backgroundColor: const Color.fromARGB(255, 30, 0, 255),
       ),
     );
   }
 
-  // ===== 스낵바 =====
+  // ===== 스낵바 유틸리티 =====
+  /// 스낵바 표시 헬퍼 메서드
   void _showSnack(String msg, Color c, {int ms = 1500}) {
     _clearAllSnackBars();
     if (!mounted) return;
@@ -436,22 +491,26 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 모든 스낵바 제거
   void _clearAllSnackBars() {
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
   }
 
   // ===== 퀵 액션: 아이템 추가 =====
+  /// 냉장고에 새 아이템 추가 처리
+  /// Firestore에 추가하면 실시간 구독으로 자동 반영됨
   Future<void> _onAddItem() async {
     final newItem = await AddItemDialog.show(context);
     if (newItem == null) return;
     try {
-      await _fridgeRepo.addFridgeItem(newItem); // Firestore에 추가
+      // 🔴 핵심: Firestore에 추가하면 watchFridgeItems() 구독으로 자동 반영
+      await _fridgeRepo.addFridgeItem(newItem);
       _showSnack(
         '${newItem.name}이(가) 추가되었습니다',
         const Color.fromARGB(255, 30, 0, 255),
       );
-      // 스트림 구독 중이라 자동 반영 + 재랭킹
+      // 별도의 setState나 데이터 갱신 불필요 - 스트림 구독이 자동 처리
     } catch (e) {
       _showSnack('아이템 추가 실패: $e', Colors.red);
     }
