@@ -262,22 +262,7 @@ class _HomePageState extends State<HomePage> {
     final name = widget.userName;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('홈'),
-        actions: [
-          IconButton(
-            tooltip: '재료 추가',
-            onPressed: _onAddItem,
-            icon: const Icon(Icons.add_circle_outline),
-          ),
-        ],
-        bottom: _loadingFridge
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(3),
-                child: LinearProgressIndicator(minHeight: 3),
-              )
-            : null,
-      ),
+      
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.only(bottom: 24),
@@ -428,8 +413,9 @@ class _HomePageState extends State<HomePage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _loadHomeData,
-        label: const Text('추천 새로고침'),
-        icon: const Icon(Icons.refresh),
+        label: const Text('추천 새로고침', style: TextStyle(color: Colors.white),),
+        icon: const Icon(Icons.refresh, color: Colors.white),
+        backgroundColor: const Color.fromARGB(255, 30, 0, 255),
       ),
     );
   }
