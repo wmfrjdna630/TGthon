@@ -2,16 +2,18 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-// ==== 모델/헬퍼 ====
+// ==== 모델 ====
 import '../../models/recipe.dart';
 import '../../models/menu_rec.dart';
 import '../../models/fridge_item.dart';
-import '../../services/recipe_sort_helper.dart';
 
 // ==== 저장소/API ====
 import '../../data/recipe_repository.dart';
 import '../../data/remote/recipe_api.dart';
 import '../../data/remote/fridge_repository.dart';
+
+// ==== 서비스 ====
+import '../../services/recipe_ranker.dart';
 
 // ==== UI 위젯들 ====
 import '../../widgets/home/expiry_indicator_bar.dart';
@@ -40,29 +42,27 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
 
+  // 레시피 API
   late final RecipeRepository _recipeRepo;
 
   // 냉장고: Firestore 연동
   final FridgeRemoteRepository _fridgeRepo = FridgeRemoteRepository();
   List<FridgeItem> _fridgeItems = [];
   bool _loadingFridge = false;
+  StreamSubscription<List<FridgeItem>>? _fridgeSub;
 
   // 추천/정렬 상태
   SortMode _sortMode = SortMode.expiry;
   TimeFilter _timeFilter = TimeFilter.month;
 
-  // 메뉴 상태
+  // 메뉴/레시피
   List<MenuRec> _menus = [];
   bool _loadingMenus = true;
   List<MenuRec> _allMenus = [];
   Map<String, Recipe> _recipeByTitle = {};
+  RecipeRanker? _ranker;
 
-  // 스트림 구독 (핵심)
-  StreamSubscription<List<FridgeItem>>? _fridgeSub;
-
-  // 유틸
-  List<FridgeItem> get _allFridgeItems => _fridgeItems;
-
+  // ===== 필터/유틸 =====
   int get _maxDaysForFilter {
     switch (_timeFilter) {
       case TimeFilter.week:
@@ -81,9 +81,9 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
 
-    // API 키: dart-define 우선
+    // -- API 키 설정: dart-define 우선, 없으면 데모 키 --
     const defineKey = String.fromEnvironment('FOOD_API_KEY');
-    const hardKey = 'b98006370cc24b529436'; // 데모용
+    const hardKey = 'sample';
 
     _recipeRepo = RecipeRepository(
       api: RecipeApi(
@@ -93,21 +93,40 @@ class _HomePageState extends State<HomePage> {
       ),
     );
 
-    // 1) 최초 로드
-    _loadFridgeItems();
-    _loadHomeData();
+    // 냉장고 초기 로드 + 실시간 구독
+    _initFridge();
 
-    // 2) 실시간 구독: 냉장고 변경 → 홈 자동 반영 (여기가 핵심)
-    _fridgeSub = _fridgeRepo.watchFridgeItems().listen((items) {
+    // 레시피/추천 로드
+    _loadHomeData();
+  }
+
+  Future<void> _initFridge() async {
+    setState(() => _loadingFridge = true);
+    try {
+      // 초기값
+      final items = await _fridgeRepo.getFridgeItems();
       if (!mounted) return;
       setState(() {
         _fridgeItems = items;
+        _loadingFridge = false;
       });
-      // 재료 변경되면 추천도 갱신(부하 줄이려면 디바운스/조건부 갱신 가능)
-      _loadHomeData();
-    }, onError: (e) {
-      _showSnack('냉장고 실시간 연동 오류: $e', Colors.red);
-    });
+
+      // 🔴 Firestore 실시간 구독
+      _fridgeSub?.cancel();
+      _fridgeSub = _fridgeRepo.watchFridgeItems().listen((items) {
+        if (!mounted) return;
+        setState(() => _fridgeItems = items);
+        // 냉장고 변화 → 추천 재랭킹
+        _rankAndSet();
+      }, onError: (e) {
+        if (!mounted) return;
+        _showSnack('냉장고 실시간 연동 오류: $e', Colors.red);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingFridge = false);
+      _showSnack('냉장고 로드 실패: $e', Colors.red);
+    }
   }
 
   @override
@@ -118,41 +137,7 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // ==============================
-  // 냉장고 로드/추가
-  // ==============================
-  Future<void> _loadFridgeItems() async {
-    setState(() => _loadingFridge = true);
-    try {
-      final items = await _fridgeRepo.getFridgeItems();
-      if (!mounted) return;
-      setState(() {
-        _fridgeItems = items;
-        _loadingFridge = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _loadingFridge = false);
-      _showSnack('냉장고 불러오기 실패: $e', Colors.red);
-    }
-  }
-
-  Future<void> _onAddItem() async {
-    final newItem = await AddItemDialog.show(context);
-    if (newItem == null) return;
-    try {
-      await _fridgeRepo.addFridgeItem(newItem);
-      // 스트림이 있으므로 별도 수동 리로드 없어도 자동 반영됨
-      _showSnack('${newItem.name}이(가) 추가되었습니다',
-          const Color.fromARGB(255, 30, 0, 255));
-    } catch (e) {
-      _showSnack('아이템 추가 실패: $e', Colors.red);
-    }
-  }
-
-  // ==============================
-  // 메뉴 로딩/정렬
-  // ==============================
+  // ===== 레시피 로드 & 랭킹 =====
   Future<void> _loadHomeData() async {
     try {
       setState(() => _loadingMenus = true);
@@ -161,6 +146,7 @@ class _HomePageState extends State<HomePage> {
           ? null
           : _searchController.text.trim();
 
+      // 1) 메뉴 수집
       const int pageSize = 100;
       const int maxPages = 50;
 
@@ -175,70 +161,102 @@ class _HomePageState extends State<HomePage> {
         );
         if (chunk.isEmpty) break;
         gathered.addAll(chunk);
-        if (gathered.length >= 20000) break;
+        if (gathered.length >= 20000) break; // 안전 상한
       }
 
-      final List<Recipe> recipeList =
-          gathered.map((m) => m.toRecipe()).toList();
-      final recipeIndex = RecipeSortHelper.buildRecipeIndex(recipeList);
+      // 2) Recipe 인덱스
+      final recipeIndex = <String, Recipe>{};
+      for (final m in gathered) {
+        final r = m.toRecipe();
+        recipeIndex[r.title] = r;
+      }
 
-      final visible = RecipeSortHelper.sortAndFilterMenus(
+      // 3) 랭커 준비 & 정렬
+      _ranker = RecipeRanker(
+        fridgeItems: _fridgeItems,
+        preferences: const ClickBasedPreference(),
+      );
+
+      final ranked = _ranker!.sortByPriority(
         menus: gathered,
         recipeByTitle: recipeIndex,
-        mode: _sortMode,
-        expiryThresholdDays: 7,
       );
 
       if (!mounted) return;
       setState(() {
         _allMenus = gathered;
         _recipeByTitle = recipeIndex;
-        _menus = visible.take(10).toList();
+        _menus = ranked.take(10).toList();
         _loadingMenus = false;
       });
     } catch (e) {
       if (!mounted) return;
-      _showSnack('레시피 API 호출 실패', Colors.red);
+      _showSnack('레시피 로드 실패: $e', Colors.red);
       setState(() => _loadingMenus = false);
     }
   }
 
-  void _onSortModeChanged(SortMode mode) {
-    setState(() => _sortMode = mode);
-    final visible = RecipeSortHelper.sortAndFilterMenus(
+  // 냉장고가 바뀌었을 때 재랭킹만 수행 (API 재호출 없이)
+  void _rankAndSet() {
+    if (_allMenus.isEmpty || _recipeByTitle.isEmpty) return;
+
+    _ranker = RecipeRanker(
+      fridgeItems: _fridgeItems,
+      preferences: const ClickBasedPreference(),
+    );
+
+    final ranked = _ranker!.sortByPriority(
       menus: _allMenus,
       recipeByTitle: _recipeByTitle,
-      mode: _sortMode,
-      expiryThresholdDays: 7,
     );
+
     setState(() {
-      _menus = visible.take(10).toList();
+      _menus = ranked.take(10).toList();
     });
   }
 
-  void _onMenuTapped(MenuRec menu) {
+  void _onSortModeChanged(SortMode mode) {
+    setState(() => _sortMode = mode);
+    // 필요시 보조 정렬 추가 가능(지금은 랭커 결과 유지)
+  }
+
+  // 레시피 카드 탭 → 상세 화면(기존 시그니처 유지)
+  Future<void> _onMenuTapped(MenuRec menu) async {
     try {
+      // UI 즉시 반응: 클릭 카운트 증가
       setState(() {
         final idx = _menus.indexOf(menu);
-        if (idx >= 0) {
-          _menus[idx] = _menus[idx].incrementClick();
-        }
+        if (idx >= 0) _menus[idx] = _menus[idx].incrementClick();
       });
-      final recipe = menu.toRecipe();
-      Navigator.push(
+
+      final recipe = _recipeByTitle[menu.title] ?? menu.toRecipe();
+
+      await Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => RecipeDetailPage(recipe: recipe)),
       );
+
+      // 클릭/즐겨찾기가 랭킹에 영향 → 재랭킹
+      _rankAndSet();
       _showSnack('${menu.title} 레시피 보기',
           const Color.fromARGB(255, 30, 0, 255));
     } catch (e) {
-      _showSnack('레시피 이동 중 오류: $e', Colors.red);
+      _showSnack('레시피 이동 오류: $e', Colors.red);
     }
   }
 
-  // ==============================
-  // UI
-  // ==============================
+  // 즐겨찾기 토글 (MenuRecommendations 시그니처 맞춤)
+  void _onFavoriteToggled(MenuRec menu) {
+    setState(() {
+      final idx = _menus.indexOf(menu);
+      if (idx >= 0) {
+        _menus[idx] = _menus[idx].copyWith(favorite: !menu.favorite);
+      }
+    });
+    _rankAndSet();
+  }
+
+  // ===== UI =====
   @override
   Widget build(BuildContext context) {
     final name = widget.userName;
@@ -272,14 +290,14 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 16),
 
                     DynamicHeader(
-                      fridgeItems: _allFridgeItems,
+                      fridgeItems: _fridgeItems,
                       menuRecommendations: _menus,
                       todoCount: 3,
                     ),
 
                     const SizedBox(height: 16),
 
-                    ExpiryIndicatorBar(fridgeItems: _allFridgeItems),
+                    ExpiryIndicatorBar(fridgeItems: _fridgeItems),
 
                     const SizedBox(height: 16),
 
@@ -287,6 +305,7 @@ class _HomePageState extends State<HomePage> {
                       padding: const EdgeInsets.symmetric(horizontal: 24.0),
                       child: Column(
                         children: [
+                          // 냉장고 타임라인
                           Card(
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -333,6 +352,7 @@ class _HomePageState extends State<HomePage> {
 
                           const SizedBox(height: 24),
 
+                          // 메뉴 추천 리스트
                           _loadingMenus
                               ? const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 24),
@@ -345,20 +365,12 @@ class _HomePageState extends State<HomePage> {
                                   currentSortMode: _sortMode,
                                   onSortModeChanged: _onSortModeChanged,
                                   onMenuTapped: _onMenuTapped,
-                                  onFavoriteToggled: (menu) {
-                                    setState(() {
-                                      final idx = _menus.indexOf(menu);
-                                      if (idx >= 0) {
-                                        _menus[idx] = _menus[idx].copyWith(
-                                          favorite: !menu.favorite,
-                                        );
-                                      }
-                                    });
-                                  },
+                                  onFavoriteToggled: _onFavoriteToggled,
                                 ),
 
                           const SizedBox(height: 8),
 
+                          // 퀵 액션
                           Align(
                             alignment: Alignment.centerRight,
                             child: PopupMenuButton<void>(
@@ -394,7 +406,7 @@ class _HomePageState extends State<HomePage> {
                                     subtitle: Text('영수증 스캔으로 한 번에 추가'),
                                   ),
                                   onTap: () async {
-                                    // TODO: 영수증 스캔 기능
+                                    // TODO: 영수증 스캔 연결 시 구현
                                   },
                                 ),
                               ],
@@ -422,9 +434,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ==============================
-  // 공용 스낵바
-  // ==============================
+  // ===== 스낵바 =====
   void _showSnack(String msg, Color c, {int ms = 1500}) {
     _clearAllSnackBars();
     if (!mounted) return;
@@ -443,5 +453,21 @@ class _HomePageState extends State<HomePage> {
   void _clearAllSnackBars() {
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
+  }
+
+  // ===== 퀵 액션: 아이템 추가 =====
+  Future<void> _onAddItem() async {
+    final newItem = await AddItemDialog.show(context);
+    if (newItem == null) return;
+    try {
+      await _fridgeRepo.addFridgeItem(newItem); // Firestore에 추가
+      _showSnack(
+        '${newItem.name}이(가) 추가되었습니다',
+        const Color.fromARGB(255, 30, 0, 255),
+      );
+      // 스트림 구독 중이라 자동 반영 + 재랭킹
+    } catch (e) {
+      _showSnack('아이템 추가 실패: $e', Colors.red);
+    }
   }
 }

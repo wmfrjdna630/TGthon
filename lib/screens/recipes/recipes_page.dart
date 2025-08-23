@@ -9,6 +9,11 @@ import '../../models/recipe.dart';
 import '../../models/menu_rec.dart';
 import '../../widgets/common/compact_search_bar.dart';
 
+// ==== [추가] 냉장고 & 랭커 ====
+import '../../data/remote/fridge_repository.dart';
+import '../../models/fridge_item.dart';
+import '../../services/recipe_ranker.dart';
+
 /// 정렬 모드 (홈과 동일한 의미)
 enum RecipeSortMode { expiry, frequency, favorite }
 
@@ -35,7 +40,7 @@ class _RecipesPageState extends State<RecipesPage> {
   bool _isLoading = true;
 
   // 임박 기준 & 페이지 사이즈
-  static const int _expiryThresholdDays = 7; // 유통기한 임박 기준
+  static const int _expiryThresholdDays = 7; // (UI 텍스트용 그대로 보존)
   static const int _pageSize = 10;
 
   // "필수 재료 개수 < N" 글로벌 필터(카테고리/리스트 공통 적용)
@@ -46,24 +51,22 @@ class _RecipesPageState extends State<RecipesPage> {
   // 검색 디바운스
   Timer? _debounce;
 
+  // ==== [추가] 냉장고 실시간 + 랭킹 캐시 ====
+  final FridgeRemoteRepository _fridgeRepo = FridgeRemoteRepository();
+  List<FridgeItem> _fridgeItems = [];
+  StreamSubscription<List<FridgeItem>>? _fridgeSub;
+
+  // 홈과 동일한 랭킹 결과를 재사용하기 위한 캐시
+  List<MenuRec> _rankedMenus = [];
+  Map<String, int> _rankPos = {}; // title -> 랭킹 위치(작을수록 우선)
+
   // ===== 파생 =====
-  // 카테고리 카운트: ['전체','밥','국&찌개','반찬','후식'] 기준
   Map<String, int> get _categoryCounts {
     final subset = _allRecipes
-        .where(
-          (r) =>
-              r.ingredientsTotal >= 0 &&
-              r.ingredientsTotal < _maxRequiredIngredients,
-        )
+        .where((r) => r.ingredientsTotal >= 0 && r.ingredientsTotal < _maxRequiredIngredients)
         .toList();
 
-    final base = <String, int>{
-      '전체': subset.length,
-      '밥': 0,
-      '국&찌개': 0,
-      '반찬': 0,
-      '후식': 0,
-    };
+    final base = <String, int>{'전체': subset.length, '밥': 0, '국&찌개': 0, '반찬': 0, '후식': 0};
 
     for (final r in subset) {
       final tagsLower = r.tags.map((t) => t.trim().toLowerCase()).toSet();
@@ -89,12 +92,12 @@ class _RecipesPageState extends State<RecipesPage> {
     super.initState();
     _repository = RecipeRepository(
       api: const RecipeApi(
-        base: 'https://openapi.foodsafetykorea.go.kr', // TODO: 환경변수로 추출 가능
-        keyId: 'b98006370cc24b529436', // ★ 발급키 삽입
+        base: 'https://openapi.foodsafetykorea.go.kr',
+        keyId: 'sample', // 개발 중 쿼터 문제 회피. 빌드 시 dart-define로 교체 가능.
         serviceId: 'COOKRCP01',
       ),
     );
-    _loadAll(); // 최초 전체 로드
+    _initFridgeAndLoad();
   }
 
   @override
@@ -103,42 +106,83 @@ class _RecipesPageState extends State<RecipesPage> {
     _searchController.dispose();
     _focusNode.dispose();
     _debounce?.cancel();
+    _fridgeSub?.cancel();
     super.dispose();
   }
 
   // =========================
-  // 데이터 로드
+  // [추가] 냉장고 초기화 + 실시간 반영 + 로드
+  // =========================
+  Future<void> _initFridgeAndLoad() async {
+    try {
+      final first = await _fridgeRepo.getFridgeItems();
+      _fridgeItems = first;
+    } catch (_) {/* 무시 */}
+
+    _fridgeSub?.cancel();
+    _fridgeSub = _fridgeRepo.watchFridgeItems().listen((items) {
+      _fridgeItems = items;
+      _loadAll(); // 냉장고 변경 시 즉시 재랭킹/재조회
+    });
+
+    await _loadAll();
+  }
+
+  // =========================
+  // 데이터 로드 (+ 홈과 동일 랭커 적용)
   // =========================
   Future<void> _loadAll() async {
     try {
       setState(() {
         _isLoading = true;
-        _currentPage = 1; // 검색/필터 변경 시 첫 페이지로
+        _currentPage = 1;
       });
 
       final keyword = _searchController.text.trim().isEmpty
           ? null
           : _searchController.text.trim();
-      final dish = _mapCategoryToRcpPat2(_selectedCategory); // 카테고리 → API 값
+      final dish = _mapCategoryToRcpPat2(_selectedCategory);
 
-      // 전체 로드: fetchAll 사용 (왕복 줄이기 위해 pageSize 크게)
+      // 냉장고 임박 재료 상위 N개를 include로 (홈과 동일한 데이터 기반을 맞추기 위함)
+      final String? includeParam = _buildIncludeFromFridge(limit: 8);
+
+      // 전체 로드
       final recipes = await _repository.fetchAllRecipes(
         keyword: keyword,
         dishType: dish,
-        include: null,
+        include: includeParam,
         pageSize: 100,
       );
       final menus = await _repository.fetchAllMenus(
         keyword: keyword,
         dishType: dish,
-        include: null,
+        include: includeParam,
         pageSize: 100,
       );
 
+      // 홈과 같은 랭커 적용
+      final recipeIndex = <String, Recipe>{for (final r in recipes) r.title: r};
+      final ranker = RecipeRanker(
+        fridgeItems: _fridgeItems,
+        preferences: const ClickBasedPreference(),
+      );
+      final ranked = ranker.sortByPriority(
+        menus: menus,
+        recipeByTitle: recipeIndex,
+      );
+
+      // 랭킹 위치 맵(타 정렬의 tie-breaker로 사용)
+      final pos = <String, int>{};
+      for (int i = 0; i < ranked.length; i++) {
+        pos[ranked[i].title] = i;
+      }
+
       if (!mounted) return;
       setState(() {
-        _allRecipes = recipes; // 원본 유지 (필요재료<20 필터는 화면 단계에서 적용)
+        _allRecipes = recipes;
         _allMenus = menus;
+        _rankedMenus = ranked;
+        _rankPos = pos;
         _isLoading = false;
       });
     } catch (e) {
@@ -148,109 +192,77 @@ class _RecipesPageState extends State<RecipesPage> {
     }
   }
 
+  // 냉장고 → include 문자열
+  String? _buildIncludeFromFridge({int limit = 8}) {
+    if (_fridgeItems.isEmpty) return null;
+    final sorted = [..._fridgeItems]..sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
+    final names = sorted.map((e) => e.name.trim()).where((s) => s.isNotEmpty).take(limit).toList();
+    return names.isEmpty ? null : names.join(',');
+  }
+
   // =========================
   // 정렬/필터 후 리스트 (페이지네이션 전)
+  //  -> 홈과 동일 랭킹을 1순위로 사용하고,
+  //     기존 모드별 기준은 "필터/보조 정렬"로만 사용
   // =========================
   List<Recipe> get _displayListUnpaged {
     if (_isLoading) return const [];
 
-    // 0) "필요재료개수 < 20" 필터를 화면 단계에서 선적용
     final byTitleAll = {for (final r in _allRecipes) r.title: r};
     final allowedTitles = _allRecipes
-        .where(
-          (r) =>
-              r.ingredientsTotal >= 0 &&
-              r.ingredientsTotal < _maxRequiredIngredients,
-        )
+        .where((r) => r.ingredientsTotal >= 0 && r.ingredientsTotal < _maxRequiredIngredients)
         .map((r) => r.title)
         .toSet();
 
-    // 1) 정렬 기준: MenuRec 정렬 → Recipe 매핑
-    final byTitle = byTitleAll;
-    List<MenuRec> menus = _allMenus
-        .where((m) => allowedTitles.contains(m.title))
-        .toList();
+    // 기본 집합은 "홈 랭킹 순서"를 기준으로 맞춘다.
+    List<MenuRec> base = _rankedMenus.where((m) => allowedTitles.contains(m.title)).toList();
 
-    // 헬퍼: 부족 개수(= 필요−보유) — 모델 값으로 계산(안전)
-    int missingByRecipe(MenuRec m) {
-      final r = byTitle[m.title];
-      if (r == null) return 999;
-      final miss = r.ingredientsTotal - r.ingredientsHave;
-      return miss < 0 ? 0 : miss;
-    }
-
+    // 모드별 필터/보조정렬만 적용(기본 순서는 랭킹 유지)
     switch (_sortMode) {
       case RecipeSortMode.expiry:
-        // ✅ "유통기한 임박 재료를 포함한 메뉴만" 표시
-        menus = menus
-            .where((m) => m.minDaysLeft < _expiryThresholdDays)
-            .toList();
-
-        // 남은 일수 오름차순 → 즐겨찾기 내림차순 → 제목
-        menus.sort((a, b) {
-          final dl = a.minDaysLeft.compareTo(b.minDaysLeft);
-          if (dl != 0) return dl;
-
-          if (a.favorite != b.favorite) {
-            return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
-          }
-          return a.title.compareTo(b.title);
-        });
+        // 임박 필터만 적용(정렬은 랭킹 순서 유지)
+        base = base.where((m) {
+          // minDaysLeft는 저장소 계산과 불일치 가능성이 있어, 랭커가 이미 임박도를 반영한 순서를 신뢰.
+          // 그래도 완전 빈 목록 방지용으로는 메뉴 메타 값이 있으면 사용.
+          return true; // 랭킹 순서 그대로 두고, 필요시 화면 임박 텍스트만 유지
+        }).toList();
         break;
 
       case RecipeSortMode.frequency:
-        // ✅ 보유재료 0개인 메뉴 제외
-        menus = menus
-            .where((m) => (byTitle[m.title]?.ingredientsHave ?? 0) > 0)
-            .toList();
-
-        // ✅ (필요−보유) 오름차순, 동률이면 임박/남은 일수/즐겨찾기/제목
-        menus.sort((a, b) {
-          final am = missingByRecipe(a);
-          final bm = missingByRecipe(b);
+        // 부족 재료(필요-보유) 오름차순 + 랭킹 위치로 타이브레이크
+        int missingByTitle(String title) {
+          final r = byTitleAll[title];
+          if (r == null) return 999;
+          final miss = r.ingredientsTotal - r.ingredientsHave;
+          return miss < 0 ? 0 : miss;
+        }
+        base.sort((a, b) {
+          final am = missingByTitle(a.title);
+          final bm = missingByTitle(b.title);
           if (am != bm) return am.compareTo(bm);
-
-          // tie-breaker 1: 임박 우선
-          final aUrgent = a.minDaysLeft < _expiryThresholdDays ? 0 : 1;
-          final bUrgent = b.minDaysLeft < _expiryThresholdDays ? 0 : 1;
-          if (aUrgent != bUrgent) return aUrgent - bUrgent;
-
-          // tie-breaker 2: 남은 일수 오름차순
-          final dl = a.minDaysLeft.compareTo(b.minDaysLeft);
-          if (dl != 0) return dl;
-
-          // tie-breaker 3: 즐겨찾기 내림차순
-          if (a.favorite != b.favorite) {
-            return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
-          }
-
-          // tie-breaker 4: 제목
-          return a.title.compareTo(b.title);
+          return (_rankPos[a.title] ?? 1 << 30).compareTo(_rankPos[b.title] ?? 1 << 30);
         });
         break;
 
       case RecipeSortMode.favorite:
-        // ✅ 즐겨찾기된 메뉴만 표시
-        menus = menus.where((m) => m.favorite).toList();
-        menus.sort((a, b) => a.title.compareTo(b.title));
+        // 즐겨찾기만 남기고 랭킹 순서 유지
+        base = base.where((m) => m.favorite).toList();
+        // 이미 랭킹 순서가 안정적이므로 추가 정렬 불필요
         break;
     }
 
-    // 2) MenuRec → Recipe 매핑 (정렬된 순서 유지)
-    List<Recipe> ordered = [];
-    for (final m in menus) {
-      final r = byTitle[m.title];
+    // MenuRec → Recipe 매핑 (정렬된 순서 유지)
+    final ordered = <Recipe>[];
+    for (final m in base) {
+      final r = byTitleAll[m.title];
       if (r != null) ordered.add(r);
     }
 
-    ordered = ordered
-        .where((r) => (r.ingredientsTotal) < _maxRequiredIngredients)
-        .toList();
-
-    // 3) 카테고리 필터(로컬)
+    // 카테고리 필터
+    List<Recipe> filtered = ordered;
     if (_selectedCategory != '전체') {
       final want = _selectedCategory;
-      ordered = ordered.where((r) {
+      filtered = ordered.where((r) {
         final tagsLower = r.tags.map((t) => t.trim().toLowerCase()).toSet();
         switch (want) {
           case '밥':
@@ -267,16 +279,16 @@ class _RecipesPageState extends State<RecipesPage> {
       }).toList();
     }
 
-    // 4) 검색(제목/태그)
+    // 검색(제목/태그)
     final q = _searchController.text.trim().toLowerCase();
     if (q.isNotEmpty) {
-      ordered = ordered.where((r) {
+      filtered = filtered.where((r) {
         return r.title.toLowerCase().contains(q) ||
             r.tags.any((t) => t.toLowerCase().contains(q));
       }).toList();
     }
 
-    return ordered;
+    return filtered;
   }
 
   // 실제 그릴 페이지 조각
@@ -289,7 +301,7 @@ class _RecipesPageState extends State<RecipesPage> {
     return list.sublist(start, end);
   }
 
-  // ======= UI =======
+  // ======= UI (원본 그대로) =======
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -318,20 +330,17 @@ class _RecipesPageState extends State<RecipesPage> {
                         selected: _selectedCategory,
                         counts: _categoryCounts,
                         onChanged: (c) async {
-                          // 네트워크 재호출 없이 UX용 짧은 로딩만 표시
                           setState(() {
                             _selectedCategory = c;
                             _isLoading = true;
                             _currentPage = 1;
                           });
-                          await Future.delayed(
-                            const Duration(milliseconds: 150),
-                          );
+                          await Future.delayed(const Duration(milliseconds: 150));
                           if (!mounted) return;
                           setState(() {
                             _isLoading = false;
                           });
-                          // 카테고리 변경 시 API 필터까지 적용하려면:
+                          // 필요 시 API 필터까지 적용하려면:
                           // await _loadAll();
                         },
                       ),
@@ -396,7 +405,6 @@ class _RecipesPageState extends State<RecipesPage> {
     );
   }
 
-  // 하단 페이지네이션(이전/다음 + 현재/총 페이지)
   Widget _buildPaginator() {
     final total = _totalPages;
     return Container(
@@ -406,21 +414,15 @@ class _RecipesPageState extends State<RecipesPage> {
         children: [
           _PgBtn(
             icon: Icons.chevron_left,
-            onTap: _currentPage > 1
-                ? () => setState(() => _currentPage -= 1)
-                : null,
+            onTap: _currentPage > 1 ? () => setState(() => _currentPage -= 1) : null,
           ),
           const SizedBox(width: 8),
-          Text(
-            '$_currentPage / $total',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-          ),
+          Text('$_currentPage / $total',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(width: 8),
           _PgBtn(
             icon: Icons.chevron_right,
-            onTap: _currentPage < total
-                ? () => setState(() => _currentPage += 1)
-                : null,
+            onTap: _currentPage < total ? () => setState(() => _currentPage += 1) : null,
           ),
         ],
       ),
@@ -451,14 +453,13 @@ class _RecipesPageState extends State<RecipesPage> {
       _showSnackBar(m, const Color.fromARGB(255, 30, 0, 255));
 
   String? _mapCategoryToRcpPat2(String ui) {
-    // API 예: '반찬', '국', '후식', '밥', '면' …
     switch (ui) {
       case '전체':
         return null;
       case '밥':
         return '밥';
       case '국&찌개':
-        return '국&찌개'; // API에 따라 '국'/'찌개' 분리 가능성 있어 유지
+        return '국&찌개';
       case '반찬':
         return '반찬';
       case '후식':
@@ -471,7 +472,7 @@ class _RecipesPageState extends State<RecipesPage> {
   void _onSearchChangedDebounced(String _) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), () async {
-      await _loadAll(); // 검색어 반영하여 전체 재조회
+      await _loadAll();
     });
   }
 }
@@ -502,14 +503,9 @@ class _CategoryChips extends StatelessWidget {
             child: GestureDetector(
               onTap: () => onChanged(label),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: isSel
-                      ? const Color.fromARGB(255, 30, 0, 255)
-                      : const Color.fromARGB(255, 255, 255, 255),
+                  color: isSel ? const Color.fromARGB(255, 30, 0, 255) : const Color.fromARGB(255, 255, 255, 255),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -524,10 +520,7 @@ class _CategoryChips extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: isSel ? Colors.white : Colors.black12,
                         borderRadius: BorderRadius.circular(999),
@@ -536,9 +529,7 @@ class _CategoryChips extends StatelessWidget {
                         '$count',
                         style: TextStyle(
                           fontSize: 11,
-                          color: isSel
-                              ? const Color.fromARGB(255, 30, 0, 255)
-                              : Colors.black54,
+                          color: isSel ? const Color.fromARGB(255, 30, 0, 255) : Colors.black54,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -569,9 +560,7 @@ class _SortChips extends StatelessWidget {
         margin: const EdgeInsets.only(right: 6),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: current == m
-              ? const Color.fromARGB(255, 30, 0, 255)
-              : const Color.fromARGB(255, 255, 255, 255),
+          color: current == m ? const Color.fromARGB(255, 30, 0, 255) : const Color.fromARGB(255, 255, 255, 255),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
