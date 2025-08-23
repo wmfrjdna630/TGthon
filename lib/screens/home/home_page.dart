@@ -58,9 +58,14 @@ class _HomePageState extends State<HomePage> {
   // 메뉴/레시피
   List<MenuRec> _menus = [];
   bool _loadingMenus = true;
+
+  // 내부 보조: 전체 후보/인덱스
   List<MenuRec> _allMenus = [];
   Map<String, Recipe> _recipeByTitle = {};
   RecipeRanker? _ranker;
+
+  // 레시피 페이지와 동일 정책: 총 재료 < 15
+  static const int _maxRequiredIngredients = 15;
 
   // ===== 필터/유틸 =====
   /// 현재 선택된 시간 필터에 따른 최대 일수 반환
@@ -128,21 +133,6 @@ class _HomePageState extends State<HomePage> {
           // ExpiryIndicatorBar, FridgeTimeline, DynamicHeader 모두 자동 갱신
           setState(() {
             _fridgeItems = items;
-
-            // 디버깅용 로그 (필요시 제거)
-            print('🔄 냉장고 데이터 실시간 업데이트: ${items.length}개 아이템');
-
-            // 각 카테고리별 개수 계산 (디버깅용)
-            final dangerCount = items
-                .where((item) => item.daysLeft <= 7)
-                .length;
-            final warningCount = items
-                .where((item) => item.daysLeft > 7 && item.daysLeft < 30)
-                .length;
-            final safeCount = items.where((item) => item.daysLeft >= 30).length;
-            print(
-              '📊 유통기한 상태 - 위험: $dangerCount, 주의: $warningCount, 안전: $safeCount',
-            );
           });
 
           // 냉장고 변화에 따른 추천 메뉴 재랭킹
@@ -150,7 +140,6 @@ class _HomePageState extends State<HomePage> {
         },
         onError: (e) {
           if (!mounted) return;
-          print('❌ 냉장고 실시간 연동 오류: $e');
           _showSnack('냉장고 실시간 연동 오류: $e', Colors.red);
         },
       );
@@ -170,7 +159,37 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // ===== 레시피 로드 & 랭킹 =====
+  // ===== 공통 유틸: 레시피 페이지와 동일 =====
+  /// 임박 냉장고 재료 상위 N개를 include 파라미터로 만들어 API 후보군만 좁힘(개수는 유지)
+  String? _buildIncludeFromFridge({int limit = 8}) {
+    if (_fridgeItems.isEmpty) return null;
+    final sorted = [..._fridgeItems]..sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
+    final names = sorted
+        .map((e) => e.name.trim())
+        .where((s) => s.isNotEmpty)
+        .take(limit)
+        .toList();
+    return names.isEmpty ? null : names.join(',');
+  }
+
+  /// UI 표시용 보유재료 수 — 무조건 냉장고 기준으로 계산
+  int _haveCountFromFridge(Recipe r) {
+    // 간단 키워드 매칭: 제목 + 태그 텍스트에 냉장고 품목명이 포함되면 보유로 간주
+    final text = (r.title + ' ' + (r.tags.isEmpty ? '' : r.tags.join(' '))).toLowerCase();
+    final seen = <String>{};
+    int have = 0;
+    for (final f in _fridgeItems) {
+      final n = f.name.trim().toLowerCase();
+      if (n.isEmpty || seen.contains(n)) continue;
+      if (text.contains(n)) {
+        have++;
+        seen.add(n);
+      }
+    }
+    return have;
+  }
+
+  // ===== 레시피 로드 & 랭킹 — 레시피 페이지와 동일한 파이프라인 =====
   /// 홈 화면의 레시피/메뉴 데이터 로드
   Future<void> _loadHomeData() async {
     try {
@@ -180,47 +199,67 @@ class _HomePageState extends State<HomePage> {
           ? null
           : _searchController.text.trim();
 
-      // 1) 메뉴 수집 (API에서 여러 페이지 수집)
-      const int pageSize = 100;
-      const int maxPages = 50;
+      // 레시피 페이지와 동일: fetchAll* + include(임박 냉장고 재료 상위 N개)
+      final includeParam = _buildIncludeFromFridge(limit: 8);
 
-      final List<MenuRec> gathered = [];
-      for (int page = 1; page <= maxPages; page++) {
-        final chunk = await _recipeRepo.searchMenus(
-          keyword: keyword,
-          dishType: null,
-          include: null,
-          page: page,
-          pageSize: pageSize,
-        );
-        if (chunk.isEmpty) break;
-        gathered.addAll(chunk);
-        if (gathered.length >= 20000) break; // 안전 상한
-      }
+      // 1) 후보 수집 (전역 컷은 후단에서 적용)
+      final recipes = await _recipeRepo.fetchAllRecipes(
+        keyword: keyword,
+        dishType: null,
+        include: includeParam,
+        pageSize: 100,
+      );
+      final menus = await _recipeRepo.fetchAllMenus(
+        keyword: keyword,
+        dishType: null,
+        include: includeParam,
+        pageSize: 100,
+      );
 
-      // 2) Recipe 인덱스 생성
+      // 2) 표시용 보유재료 수치 = 냉장고 기준으로 재산출
       final recipeIndex = <String, Recipe>{};
-      for (final m in gathered) {
-        final r = m.toRecipe();
-        recipeIndex[r.title] = r;
+      for (final r in recipes) {
+        final have = _haveCountFromFridge(r);
+        recipeIndex[r.title] = r.copyWith(
+          ingredientsHave: (r.ingredientsTotal > 0)
+              ? have.clamp(0, r.ingredientsTotal)
+              : have,
+        );
       }
 
-      // 3) 랭커 준비 & 정렬
+      // 3) 랭커 정렬
       _ranker = RecipeRanker(
         fridgeItems: _fridgeItems,
         preferences: const ClickBasedPreference(),
       );
-
-      final ranked = _ranker!.sortByPriority(
-        menus: gathered,
+      List<MenuRec> ranked = _ranker!.sortByPriority(
+        menus: menus,
         recipeByTitle: recipeIndex,
       );
 
+      // 4) 레시피 페이지 정책과 동일 적용
+      //    - 총 재료 < 15 컷
+      //    - have==0(내 재료 없음) 뒤로 밀기
+      ranked = ranked.where((m) {
+        final r = recipeIndex[m.title];
+        if (r == null) return false;
+        return r.ingredientsTotal >= 0 && r.ingredientsTotal < _maxRequiredIngredients;
+      }).toList();
+
+      final withHave = <MenuRec>[];
+      final withoutHave = <MenuRec>[];
+      for (final m in ranked) {
+        final have = recipeIndex[m.title]?.ingredientsHave ?? 0;
+        (have > 0 ? withHave : withoutHave).add(m);
+      }
+      final rankedFinal = [...withHave, ...withoutHave];
+
       if (!mounted) return;
       setState(() {
-        _allMenus = gathered;
+        _allMenus = rankedFinal;
         _recipeByTitle = recipeIndex;
-        _menus = ranked.take(10).toList();
+        // 홈 화면은 상위 10개 노출(기존 UX 유지)
+        _menus = rankedFinal.take(10).toList();
         _loadingMenus = false;
       });
     } catch (e) {
@@ -242,14 +281,29 @@ class _HomePageState extends State<HomePage> {
     );
 
     // 재랭킹 수행
-    final ranked = _ranker!.sortByPriority(
+    List<MenuRec> ranked = _ranker!.sortByPriority(
       menus: _allMenus,
       recipeByTitle: _recipeByTitle,
     );
 
-    // UI 업데이트
+    // 동일 정책 유지(총 재료 < 15, have==0 뒤)
+    ranked = ranked.where((m) {
+      final r = _recipeByTitle[m.title];
+      if (r == null) return false;
+      return r.ingredientsTotal >= 0 && r.ingredientsTotal < _maxRequiredIngredients;
+    }).toList();
+
+    final withHave = <MenuRec>[];
+    final withoutHave = <MenuRec>[];
+    for (final m in ranked) {
+      final have = _recipeByTitle[m.title]?.ingredientsHave ?? 0;
+      (have > 0 ? withHave : withoutHave).add(m);
+    }
+    final rankedFinal = [...withHave, ...withoutHave];
+
     setState(() {
-      _menus = ranked.take(10).toList();
+      _allMenus = rankedFinal;
+      _menus = rankedFinal.take(10).toList();
     });
   }
 
@@ -379,7 +433,7 @@ class _HomePageState extends State<HomePage> {
 
                           const SizedBox(height: 24),
 
-                          // 메뉴 추천 리스트
+                          // 메뉴 추천 리스트 (레시피 페이지와 같은 기준/순서)
                           _loadingMenus
                               ? const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 24),
@@ -437,8 +491,7 @@ class _HomePageState extends State<HomePage> {
                                       ),
                                       child: Icon(
                                         Icons.camera_alt,
-                                        color: Colors.white,
-                                      ),
+                                        color: Colors.white),
                                     ),
                                     title: Text('Scan Receipt'),
                                     subtitle: Text('영수증 스캔으로 한 번에 추가'),
