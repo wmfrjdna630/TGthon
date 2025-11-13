@@ -248,7 +248,7 @@ class _FridgePageState extends State<FridgePage> {
     if (updated == null) return;
 
     try {
-      await _repository.updateFridgeItemByOldName(oldName: item.name, updated: updated);
+      await _repository.updateFridgeItem(updated);
       // 스트림 구독 중이므로 자동 반영
       _showSuccessSnackBar('${item.name}이(가) 수정되었습니다');
     } catch (e) {
@@ -287,7 +287,7 @@ class _FridgePageState extends State<FridgePage> {
 
   Future<void> _deleteItem(FridgeItem item) async {
     try {
-      await _repository.deleteFridgeItem(item.name);
+      await _repository.deleteFridgeItem(item.id);
       // 스트림 구독 중이므로 자동 반영
       _showSuccessSnackBar('${item.name}이(가) 삭제되었습니다');
     } catch (e) {

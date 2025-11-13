@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 /// 냉장고 아이템 모델
 /// 냉장고에 보관된 식품의 정보를 담는 클래스
 class FridgeItem {
+  final String id; // Firestore document ID
   final String name; // 식품명 (예: "우유", "계란")
   final String amount; // 수량 (예: "1L", "500g", "6개")
   final String category; // 카테고리 (예: "유제품", "육류", "채소")
@@ -15,6 +16,7 @@ class FridgeItem {
   final int totalDays; // 전체 유통기한 (진행률 계산용)
 
   const FridgeItem({
+    required this.id,
     required this.name,
     required this.amount,
     required this.category,
@@ -48,6 +50,7 @@ class FridgeItem {
 
   /// 샘플 데이터 생성 팩토리
   factory FridgeItem.fromSampleData({
+    String id = '',
     required String name,
     required String amount,
     required String category,
@@ -96,6 +99,7 @@ class FridgeItem {
     }
 
     return FridgeItem(
+      id: id,
       name: name,
       amount: amount,
       category: category,
@@ -112,6 +116,7 @@ class FridgeItem {
   /// 간단한 생성자 (타임라인용)
   factory FridgeItem.simple(String name, int daysLeft) {
     return FridgeItem(
+      id: '',
       name: name,
       amount: '',
       category: '',
@@ -127,6 +132,7 @@ class FridgeItem {
 
   /// 복사본 생성 (일부 속성 변경)
   FridgeItem copyWith({
+    String? id,
     String? name,
     String? amount,
     String? category,
@@ -139,6 +145,7 @@ class FridgeItem {
     int? totalDays,
   }) {
     return FridgeItem(
+      id: id ?? this.id,
       name: name ?? this.name,
       amount: amount ?? this.amount,
       category: category ?? this.category,
@@ -154,20 +161,17 @@ class FridgeItem {
 
   @override
   String toString() {
-    return 'FridgeItem(name: $name, daysLeft: $daysLeft, location: $location)';
+    return 'FridgeItem(id: $id, name: $name, daysLeft: $daysLeft, location: $location)';
   }
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is FridgeItem &&
-        other.name == name &&
-        other.amount == amount &&
-        other.location == location;
+    return other is FridgeItem && other.id == id;
   }
 
   @override
   int get hashCode {
-    return name.hashCode ^ amount.hashCode ^ location.hashCode;
+    return id.hashCode;
   }
 }
