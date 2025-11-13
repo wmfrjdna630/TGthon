@@ -4,7 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/fridge_item.dart';
 
 class FridgeRemoteRepository {
-  final _fs = FirebaseFirestore.instance;
+  final FirebaseFirestore _fs;
+
+  FridgeRemoteRepository({FirebaseFirestore? firestore})
+      : _fs = firestore ?? FirebaseFirestore.instance;
+
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
 
   CollectionReference<Map<String, dynamic>> get _col =>
@@ -52,64 +56,28 @@ class FridgeRemoteRepository {
   // UPDATE
   // =========================
   /// (1) 이름 + 변경필드 맵 기반 업데이트
-  Future<void> updateFridgeItem(String name, Map<String, dynamic> data) async {
-    final q = await _col.where('name', isEqualTo: name).get();
-    for (final d in q.docs) {
-      await d.reference.update({
-        ...data,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-  }
-     /// (3) 이름 변경을 포함한 업데이트 (oldName 기준 문서 탐색)
-  Future<void> updateFridgeItemByOldName({
-    required String oldName,
-    required FridgeItem updated,
-  }) async {
-    final q = await _col.where('name', isEqualTo: oldName).limit(1).get();
-    if (q.docs.isEmpty) return;
-    final now = DateTime.now();
-    final expiryDate = now.add(Duration(days: updated.daysLeft));
-    final ref = q.docs.first.reference;
-    await ref.update({
-      'name': updated.name,                // ← 새 이름으로 실제 문서 갱신
-      'amount': updated.amount,
-      'category': updated.category,
-      'location': updated.location,
-      'totalDays': updated.totalDays, 'expiryDate': Timestamp.fromDate(expiryDate),
-      'key': '${updated.name}|${updated.location}', // 기존 key 규칙도 갱신
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  /// (2) 객체 기반 업데이트 (기존 호출과 호환)
-  Future<void> updateFridgeItemObject(FridgeItem item) async {
+  Future<void> updateFridgeItem(FridgeItem item) async {
     final now = DateTime.now();
     final expiryDate = now.add(Duration(days: item.daysLeft));
 
-    await updateFridgeItem(item.name, {
+    await _col.doc(item.id).update({
+      'name': item.name,
       'amount': item.amount,
       'category': item.category,
       'location': item.location,
       'totalDays': item.totalDays,
       'expiryDate': Timestamp.fromDate(expiryDate),
+      'key': '${item.name}|${item.location}',
+      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
   // =========================
   // DELETE
   // =========================
-  /// (1) 이름 기반 삭제
-  Future<void> deleteFridgeItem(String name) async {
-    final q = await _col.where('name', isEqualTo: name).get();
-    for (final d in q.docs) {
-      await d.reference.delete();
-    }
+  Future<void> deleteFridgeItem(String id) async {
+    await _col.doc(id).delete();
   }
-
-  /// (2) 객체 기반 삭제 (기존 호출과 호환)
-  Future<void> deleteFridgeItemObject(FridgeItem item) =>
-      deleteFridgeItem(item.name);
 
   // =========================
   // MAPPER
@@ -124,6 +92,7 @@ class FridgeRemoteRepository {
 
     // UI 색/아이콘 계산은 기존 팩토리 유지
     return FridgeItem.fromSampleData(
+      id: doc.id,
       name: (m['name'] ?? '').toString(),
       amount: (m['amount'] ?? '').toString(),
       category: (m['category'] ?? '').toString(),

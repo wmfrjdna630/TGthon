@@ -63,6 +63,7 @@ class _EditItemDialogState extends State<EditItemDialog> {
     final totalDays = int.tryParse(_totalDaysCtrl.text.trim()) ?? 0;
 
     final updated = FridgeItem.fromSampleData(
+      id: widget.item.id,
       name: name,
       amount: amount,
       category: category,
